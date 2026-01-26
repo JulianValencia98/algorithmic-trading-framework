@@ -1,0 +1,44 @@
+# Credenciales - NUNCA subir
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Virtual Environment
+.venv/
+venv/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Bases de datos locales (contienen trades reales)
+*.db
+trades_account_*.db
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
