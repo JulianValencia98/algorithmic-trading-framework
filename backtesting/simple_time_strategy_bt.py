@@ -3,6 +3,8 @@ import numpy as np
 from typing import Dict, List, Any
 
 from strategies.simple_time_strategy import SimpleTimeStrategy
+from .unified_backtest_engine import run_strategy_backtest
+from .data_manager import get_backtest_data
 
 
 class BacktestingEngine:
@@ -241,3 +243,34 @@ class BacktestingEngine:
 def run_backtest(data: pd.DataFrame, initial_capital: float = 10000.0, risk_per_trade: float = 0.01, commission: float = 0.0001) -> Dict[str, Any]:
     engine = BacktestingEngine(initial_capital=initial_capital, risk_per_trade=risk_per_trade, commission=commission)
     return engine.backtest(data)
+
+
+def run_backtest_with_oanda(symbol: str = "EURUSD", timeframe: str = "H1", count: int = 1000, 
+                            initial_capital: float = 10000.0, risk_per_trade: float = 0.01, 
+                            commission: float = 0.0001, verbose: bool = True) -> Dict[str, Any]:
+    """
+    Ejecuta backtesting usando datos de Oanda como fuente principal.
+    
+    Args:
+        symbol: Símbolo del instrumento
+        timeframe: Timeframe (M1, M5, H1, H4, D1)
+        count: Número de velas
+        initial_capital: Capital inicial
+        risk_per_trade: Riesgo por trade
+        commission: Comisión por trade
+        verbose: Mostrar logs detallados
+        
+    Returns:
+        Dict con resultados del backtesting
+    """
+    return run_strategy_backtest(
+        strategy_class=SimpleTimeStrategy,
+        symbol=symbol,
+        timeframe=timeframe,
+        count=count,
+        initial_capital=initial_capital,
+        risk_per_trade=risk_per_trade,
+        commission=commission,
+        preferred_provider="oanda",
+        verbose=verbose
+    )

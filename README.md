@@ -14,6 +14,7 @@ Framework de trading algorítmico simplificado, orientado a ejecución en vivo c
 - Conexión y gestión de cuenta MT5 (`BasicTrading`) con reconexión automática.
 - **Ejecución multi-bot concurrente** con `AppDirector` (múltiples estrategias simultáneas).
 - **Control pausa/reanudación estilo semáforo** mediante CLI (pause, resume, status).
+- **🆕 Sistema de pausa global inteligente**: Cuando todos los bots están pausados, el sistema automáticamente pausa el envío/pedido de toda la información (eventos, notificaciones, logging).
 - **Threading independiente** para cada bot con eventos de control.
 - **Magic numbers por estrategia**: Cada estrategia tiene su propio magic number único.
 - **Nombres de bots automáticos** (formato: StrategyName_Symbol_Timeframe).
@@ -60,6 +61,7 @@ Notas:
 - Estrategias: [strategies/](strategies) - Estrategias autónomas con magic numbers únicos
 - Backtesting: scripts en [backtesting/](backtesting)
 - Notificaciones: [notifications/](notifications) - Sistema de alertas Telegram
+- **🆕 Estado Global**: [utils/global_state.py](utils/global_state.py) - Gestión de pausa global del sistema
 - Utilidades: [utils/](utils) - Helpers varios
 
 ### Conexión y prueba de cuenta
@@ -156,6 +158,51 @@ app_director.stop_all_bots()
 bt.shutdown()
 ```
 
+## 🆕 Sistema de Pausa Global
+
+El framework incluye un **sistema inteligente de pausa global** que automáticamente gestiona el flujo de información cuando todos los bots están pausados:
+
+### Funcionamiento Automático
+- **Cuando TODOS los bots están pausados**: El sistema automáticamente pausa:
+  - ❌ Eventos (señales, apertura/cierre de trades)
+  - ❌ Notificaciones (Telegram, etc.)
+  - ❌ Logging de trades y señales
+  - ❌ Cualquier envío/pedido de información
+
+- **Cuando AL MENOS UN bot está activo**: El sistema automáticamente reanuda:
+  - ✅ Todos los eventos
+  - ✅ Todas las notificaciones  
+  - ✅ Todo el logging
+  - ✅ Flujo normal de información
+
+### Beneficios
+- **Ahorro de recursos**: No se envían eventos innecesarios cuando no hay actividad
+- **Control de ruido**: Las notificaciones se pausan automáticamente
+- **Gestión inteligente**: El sistema detecta automáticamente el estado global
+- **Thread-safe**: Implementación segura para entornos concurrentes
+
+### Ejemplo de uso
+```python
+# Pausar todos los bots → Sistema se pausa globalmente
+app_director.pause_bot("SimpleTime_EURUSD_M1")
+app_director.pause_bot("SimpleTimeGBP_GBPUSD_M1")  
+app_director.pause_bot("SimpleTimeXAU_XAUUSD_M1")
+# → Automáticamente: Sin eventos, notificaciones ni logging
+
+# Reanudar un bot → Sistema se reanuda globalmente
+app_director.resume_bot("SimpleTime_EURUSD_M1")
+# → Automáticamente: Vuelven todos los eventos, notificaciones y logging
+```
+
+### Verificación programática
+```python
+# Verificar si el sistema está pausado globalmente
+if app_director.is_globally_paused():
+    print("Sistema en pausa global - Sin actividad de información")
+else:
+    print("Sistema activo - Flujo normal de información")
+```
+
 ## Flujo de Ejecución
 
 ```
@@ -248,6 +295,7 @@ app_director.add_bot(bot)
 - **Estrategia autónoma**: La estrategia controla sizing, SL/TP y gestión de posiciones
 - **Nombres automáticos**: Se generan como StrategyName_Symbol_Timeframe
 - **Control de bots**: Usa `pause` y `resume` para control en tiempo real
+- **🆕 Pausa inteligente**: Pausar todos los bots automáticamente silencia todo el sistema
 - **Validación de duplicados**: El sistema valida que no haya magic numbers duplicados
 - **Monitoreo**: Usa el comando `status` para verificar el estado de tus bots
 - **Cierre seguro**: Usa `exit` en el CLI o `app_director.stop_all_bots()` + `bt.shutdown()`

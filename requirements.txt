@@ -7,3 +7,4 @@ numpy==1.26.4
 backtesting==0.6.5
 beautifulsoup4==4.12.3
 streamlit==1.40.0
+requests==2.32.3

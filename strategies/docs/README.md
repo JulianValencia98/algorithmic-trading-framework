@@ -4,6 +4,10 @@
 
 Cada estrategia es **completamente autónoma**. El framework solo orquesta la ejecución.
 
+### 🆕 Sistema de Pausa Global
+
+El framework incluye un sistema inteligente que pausa automáticamente el envío/pedido de información (eventos, notificaciones, logging) cuando todos los bots están pausados. Esto significa que las estrategias no necesitan preocuparse por el manejo del estado global - el sistema lo maneja automáticamente.
+
 ### Métodos que DEBE implementar cada estrategia:
 
 ```python

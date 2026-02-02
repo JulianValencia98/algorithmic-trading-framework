@@ -3,10 +3,17 @@ import pandas as pd
 import numpy as np
 from typing import Dict, List, Any
 
-import MetaTrader5 as mt5
+# Mantener MT5 para compatibilidad pero usar Oanda como principal
+try:
+    import MetaTrader5 as mt5
+    from Easy_Trading import BasicTrading
+    MT5_AVAILABLE = True
+except ImportError:
+    MT5_AVAILABLE = False
 
-from Easy_Trading import BasicTrading
 from strategies.simple_time_strategy_xau import SimpleTimeStrategyXAU
+from .unified_backtest_engine import run_strategy_backtest
+from .data_manager import get_backtest_data
 
 
 class BacktestingEngine:
@@ -263,10 +270,43 @@ def _resolve_timeframe(timeframe: str):
 
 
 def run_backtest_from_mt5(symbol: str, timeframe: str, count: int, initial_capital: float = 10000.0, risk_per_trade: float = 0.01, commission: float = 0.0001) -> Dict[str, Any]:
+    if not MT5_AVAILABLE:
+        raise ImportError("MetaTrader5 no está disponible")
     basic_trading = BasicTrading()
     data = basic_trading._get_data_for_bt(_resolve_timeframe(timeframe), symbol, count)
     basic_trading.shutdown()
     return run_backtest(data, initial_capital=initial_capital, risk_per_trade=risk_per_trade, commission=commission)
+
+
+def run_backtest_with_oanda(symbol: str = "XAUUSD", timeframe: str = "M1", count: int = 5000, 
+                            initial_capital: float = 10000.0, risk_per_trade: float = 0.01, 
+                            commission: float = 0.0001, verbose: bool = True) -> Dict[str, Any]:
+    """
+    Ejecuta backtesting de XAU usando datos de Oanda como fuente principal.
+    
+    Args:
+        symbol: Símbolo del instrumento (XAUUSD por defecto)
+        timeframe: Timeframe (M1, M5, H1, H4, D1)
+        count: Número de velas
+        initial_capital: Capital inicial
+        risk_per_trade: Riesgo por trade
+        commission: Comisión por trade
+        verbose: Mostrar logs detallados
+        
+    Returns:
+        Dict con resultados del backtesting
+    """
+    return run_strategy_backtest(
+        strategy_class=SimpleTimeStrategyXAU,
+        symbol=symbol,
+        timeframe=timeframe,
+        count=count,
+        initial_capital=initial_capital,
+        risk_per_trade=risk_per_trade,
+        commission=commission,
+        preferred_provider="oanda",
+        verbose=verbose
+    )
 
 
 if __name__ == '__main__':
@@ -281,16 +321,32 @@ if __name__ == '__main__':
     risk_per_trade = float(os.getenv('BT_RISK_PER_TRADE', '0.01'))
     commission = float(os.getenv('BT_COMMISSION', '0.0001'))
 
-    results = run_backtest_from_mt5(
-        symbol=symbol,
-        timeframe=timeframe,
-        count=count,
-        initial_capital=initial_capital,
-        risk_per_trade=risk_per_trade,
-        commission=commission
-    )
-
-    print("\n===== Backtest Results (MT5) =====")
+    # Usar Oanda como fuente principal, MT5 como fallback
+    use_oanda = os.getenv('BT_USE_OANDA', 'true').lower() == 'true'
+    
+    if use_oanda:
+        print("\n===== Usando datos de Oanda =====")
+        results = run_backtest_with_oanda(
+            symbol=symbol,
+            timeframe=timeframe,
+            count=count,
+            initial_capital=initial_capital,
+            risk_per_trade=risk_per_trade,
+            commission=commission,
+            verbose=True
+        )
+        print("\n===== Backtest Results (Oanda) =====")
+    else:
+        print("\n===== Usando datos de MT5 (fallback) =====")
+        results = run_backtest_from_mt5(
+            symbol=symbol,
+            timeframe=timeframe,
+            count=count,
+            initial_capital=initial_capital,
+            risk_per_trade=risk_per_trade,
+            commission=commission
+        )
+        print("\n===== Backtest Results (MT5) =====")
     print(f"Symbol: {symbol} | Timeframe: {timeframe} | Bars: {count}")
     print(f"Final Capital: {results['final_capital']:.2f}")
     print(f"Total PnL: {results['total_pnl']:.2f}")
