@@ -5,17 +5,24 @@ Este motor de backtesting usa datos históricos de Oanda como fuente principal,
 con MetaTrader5 como fallback. Soporta múltiples estrategias.
 """
 import os
+import sys
 import pandas as pd
 import numpy as np
 from typing import Dict, List, Any, Optional, Type
 from datetime import datetime, timedelta
+
+# Agregar el directorio raíz al path si es necesario
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
 
 # Importar strategies disponibles
 from strategies.simple_time_strategy import SimpleTimeStrategy
 from strategies.strategy_base import StrategyBase
 
 # Importar data manager
-from .data_manager import BacktestDataManager, get_backtest_data
+from backtesting.data_manager import BacktestDataManager, get_backtest_data
 from utils.utils import Utils
 
 
@@ -102,7 +109,7 @@ class UnifiedBacktestingEngine:
         
         # Ejecutar backtesting
         try:
-            results = self.backtest(data, strategy_class, verbose=verbose)
+            results = self.backtest(data, strategy_class, symbol=symbol, verbose=verbose)
             results.update({
                 "symbol": symbol,
                 "timeframe": timeframe,
@@ -128,6 +135,7 @@ class UnifiedBacktestingEngine:
         self,
         data: pd.DataFrame,
         strategy_class: Type[StrategyBase],
+        symbol: str = "EURUSD",
         verbose: bool = False
     ) -> Dict[str, Any]:
         """
@@ -136,6 +144,7 @@ class UnifiedBacktestingEngine:
         Args:
             data: DataFrame con datos OHLCV
             strategy_class: Clase de estrategia a usar
+            symbol: Símbolo del instrumento (default: EURUSD)
             verbose: Mostrar logs detallados
             
         Returns:
@@ -274,7 +283,7 @@ class UnifiedBacktestingEngine:
                 # Calcular tamaño de posición usando la estrategia
                 try:
                     position_size = strategy.calculate_position_size(
-                        symbol="BACKTESTING",  # Símbolo dummy para BT
+                        symbol=symbol,  # Usar símbolo real
                         equity=capital,
                         entry_price=entry_price
                     )
@@ -285,7 +294,7 @@ class UnifiedBacktestingEngine:
                 # Calcular SL/TP usando la estrategia
                 try:
                     sl_price, tp_price = strategy.calculate_sl_tp(
-                        symbol="BACKTESTING",
+                        symbol=symbol,  # Usar símbolo real
                         action=signal,
                         entry_price=entry_price
                     )

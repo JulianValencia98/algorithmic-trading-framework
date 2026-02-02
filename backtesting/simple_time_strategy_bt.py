@@ -1,10 +1,15 @@
+import sys
+import os
 import pandas as pd
 import numpy as np
 from typing import Dict, List, Any
 
+# Agregar el directorio raíz al path para importaciones
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from strategies.simple_time_strategy import SimpleTimeStrategy
-from .unified_backtest_engine import run_strategy_backtest
-from .data_manager import get_backtest_data
+from unified_backtest_engine import run_strategy_backtest
+from data_manager import get_backtest_data
 
 
 class BacktestingEngine:
@@ -274,3 +279,31 @@ def run_backtest_with_oanda(symbol: str = "EURUSD", timeframe: str = "H1", count
         preferred_provider="oanda",
         verbose=verbose
     )
+
+
+if __name__ == "__main__":
+    """
+    Prueba del backtesting con SimpleTimeStrategy
+    """
+    print("🔄 Ejecutando backtesting de SimpleTimeStrategy...")
+    
+    # Ejecutar backtesting rápido
+    results = quick_backtest_simple_time(
+        symbol="EURUSD",
+        timeframe="H1",
+        count=1000,  # 1000 velas para prueba rápida
+        verbose=True
+    )
+    
+    # Mostrar resultados principales
+    if "error" in results:
+        print(f"❌ Error: {results['error']}")
+    else:
+        print("\n📊 Resultados del Backtesting:")
+        print(f"   💰 PnL Total: ${results['total_pnl']:.2f}")
+        print(f"   📈 Total Trades: {results['total_trades']}")
+        print(f"   🎯 Win Rate: {results['win_rate']:.1%}")
+        print(f"   📉 Max Drawdown: {results['max_drawdown']:.1%}")
+        print(f"   🔄 Sharpe Ratio: {results.get('sharpe_ratio', 'N/A')}")
+        print(f"   📅 Período: {results['data_period']['start']} a {results['data_period']['end']}")
+        print("✅ Backtesting completado exitosamente!")

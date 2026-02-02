@@ -23,19 +23,19 @@ from .data_manager import (
     get_backtest_data
 )
 
-# Importaciones de estrategias específicas
-from .simple_time_strategy_bt import (
-    BacktestingEngine,
-    run_backtest,
-    run_backtest_with_oanda
-)
+# Importaciones de estrategias específicas - temporalmente comentadas para evitar importaciones circulares
+# from .simple_time_strategy_bt import (
+#     BacktestingEngine,
+#     run_backtest,
+#     run_backtest_with_oanda
+# )
 
 __all__ = [
     "UnifiedBacktestingEngine",
     "run_strategy_backtest", 
     "BacktestDataManager",
     "get_backtest_data",
-    "BacktestingEngine",
-    "run_backtest",
-    "run_backtest_with_oanda"
+    # "BacktestingEngine",
+    # "run_backtest", 
+    # "run_backtest_with_oanda"
 ]
