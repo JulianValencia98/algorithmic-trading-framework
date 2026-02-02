@@ -10,20 +10,36 @@ de StrategyBase y se mantiene constante sin importar el símbolo
 o timeframe en que se ejecute la estrategia.
 
 ESTRATEGIAS REGISTRADAS:
-ID   | Nombre de Estrategia      | Magic Number
---------------------------------------------------
-0001 | SimpleTimeStrategy        | 1
-0002 | (Disponible)              | 2
-0003 | (Disponible)              | 3
-0004 | (Reservado)               | 4
-0005 | (Reservado)               | 5
+ID   | Nombre de Estrategia      | Magic Number | Símbolos Soportados
+---------------------------------------------------------------------
+0001 | SimpleTimeStrategy        | 1            | EURUSD, GBPUSD, USDJPY
+0002 | (Disponible)              | 2            | -
+0003 | (Disponible)              | 3            | -
+0004 | (Disponible)              | 4            | -
+0005 | (Disponible)              | 5            | -
+
+====================================================
+FRAMEWORK DINÁMICO - DETECCIÓN AUTOMÁTICA:
+====================================================
+El framework ahora detecta automáticamente las estrategias 
+disponibles usando StrategyDiscovery:
+
+- Escanea la carpeta strategies/
+- Detecta clases que hereden de StrategyBase
+- Lee los símbolos configurados en get_parameters()
+- Crea bots automáticamente para cada símbolo
+
+Comandos útiles:
+- python utils/strategy_discovery.py (listar estrategias)
+- python tests/test_symbols.py (validar símbolos)
+- python simple_trading_app.py (ejecutar con detección auto)
 
 ====================================================
 NOTAS IMPORTANTES:
 ====================================================
 - Cada estrategia debe tener su propio magic number único
 - El magic number se define en __init__ de la estrategia:
-  super().__init__(magic_number=X)
+  self.magic_number = X
 - Si ejecutas la misma estrategia en diferentes símbolos/
   timeframes, todos los bots compartirán el mismo magic number
 - NO se deben duplicar magic numbers entre estrategias
@@ -31,23 +47,23 @@ NOTAS IMPORTANTES:
 - Para identificar trades por bot, usa el símbolo + magic number
 
 ====================================================
-EJEMPLO DE USO:
+EJEMPLO DE USO AUTOMÁTICO:
 ====================================================
 # En strategies/mi_estrategia.py
 class MiEstrategia(StrategyBase):
     def __init__(self):
-        super().__init__(magic_number=3)  # Magic único para esta estrategia
-        
-# En simple_trading_app.py
-bot1 = BotConfig(MiEstrategia(), "EURUSD", mt5.TIMEFRAME_M1, 60)
-bot2 = BotConfig(MiEstrategia(), "GBPUSD", mt5.TIMEFRAME_M5, 300)
-# Ambos bots usarán magic_number = 3
+        super().__init__()
+        self.magic_number = 3  # Magic único para esta estrategia
+    
+    def get_parameters(self):
+        return {
+            'strategy_name': 'MiEstrategia',
+            'symbols': ['EURUSD', 'GBPUSD'],  # Framework crea bots auto
+            # ... otros parámetros
+        }
 
-====================================================
-RECOMENDACIÓN:
-====================================================
-Si necesitas ejecutar la misma lógica de estrategia en 
-diferentes símbolos con magic numbers diferentes, crea 
-clases de estrategia separadas (heredando de una base común)
-y asigna diferentes magic numbers a cada una.
+# El framework detectará automáticamente y creará:
+# - MiEstrategia_EURUSD_M1 (magic: 3)
+# - MiEstrategia_GBPUSD_M1 (magic: 3)
+
 ====================================================

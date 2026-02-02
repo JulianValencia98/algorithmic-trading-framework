@@ -69,6 +69,9 @@ class SimpleTimeStrategy(StrategyBase):
             'magic_number': self.magic_number,
             'description': 'Opens buy position, waits 20 min, closes and reopens',
             
+            # Símbolos soportados por esta estrategia
+            'symbols': ['EURUSD', 'GBPUSD', 'USDJPY'],  # Símbolos principales
+            
             # Position Management
             'close_before_open': False,  # No cerrar posiciones existentes
             'max_open_positions': 1,      # Solo 1 posición a la vez

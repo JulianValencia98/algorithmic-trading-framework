@@ -1,0 +1,509 @@
+GUÍA COMPLETA PARA CREAR ESTRATEGIAS EN EL FRAMEWORK DE TRADING
+===================================================================
+
+Este documento contiene toda la información necesaria para crear una estrategia 
+de trading que funcione en el framework. Úsalo como referencia para una IA externa.
+
+===============================================================================
+1. ESTRUCTURA BÁSICA REQUERIDA
+===============================================================================
+
+Toda estrategia debe heredar de StrategyBase e implementar 4 métodos obligatorios:
+
+```python
+from strategies.strategy_base import StrategyBase
+import pandas as pd
+from datetime import datetime
+from typing import Optional, Tuple
+
+class YourStrategy(StrategyBase):
+    def __init__(self):
+        super().__init__()
+        # OBLIGATORIO: Definir magic number único para la estrategia
+        self.magic_number = 999  # Cambiar por número único (revisar magic_numbers.txt)
+        
+        # Variables de estado de la estrategia (opcional)
+        self.your_state_variables = None
+    
+    def generate_signal(self, data: pd.DataFrame, current_index: int) -> str:
+        """MÉTODO 1: Genera señales de trading"""
+        # Tu lógica aquí
+        return 'buy'  # o 'sell' o 'hold'
+    
+    def get_parameters(self) -> dict:
+        """MÉTODO 2: Retorna configuración de la estrategia"""
+        return {
+            'strategy_name': 'YourStrategy',
+            'magic_number': self.magic_number,
+            'description': 'Descripción de tu estrategia',
+            'symbols': ['EURUSD', 'GBPUSD'],  # Símbolos que soporta
+            'close_before_open': True,  # ¿Cerrar posiciones antes de abrir?
+            'max_open_positions': 1,    # Máximo posiciones simultáneas
+        }
+    
+    def calculate_position_size(self, symbol: str, equity: float, entry_price: float) -> float:
+        """MÉTODO 3: Calcula el tamaño de posición (lotes)"""
+        # Tu lógica de risk management
+        return 0.01  # Ejemplo: lote fijo
+    
+    def calculate_sl_tp(self, symbol: str, action: str, entry_price: float) -> Tuple[Optional[float], Optional[float]]:
+        """MÉTODO 4: Calcula Stop Loss y Take Profit"""
+        pip_size = self.get_pip_size(symbol)
+        if action.lower() == 'buy':
+            sl = entry_price - (100 * pip_size)  # SL 100 pips
+            tp = entry_price + (200 * pip_size)  # TP 200 pips
+        else:  # sell
+            sl = entry_price + (100 * pip_size)
+            tp = entry_price - (200 * pip_size)
+        return sl, tp
+```
+
+===============================================================================
+2. FUNCIONES DE UTILIDAD DISPONIBLES (heredadas de StrategyBase)
+===============================================================================
+
+self.get_pip_size(symbol: str) -> float
+    - Retorna el tamaño del pip para el símbolo
+    - Ejemplo: get_pip_size("EURUSD") -> 0.0001
+
+self.format_price(price: float, symbol: str) -> float
+    - Formatea precio según los dígitos del símbolo
+    - Ejemplo: format_price(1.23456, "EURUSD") -> 1.2346
+
+self.calculate_pips(entry_price: float, exit_price: float, symbol: str, action: str) -> float
+    - Calcula diferencia en pips entre dos precios
+    - Útil para cálculos de SL/TP dinámicos
+
+===============================================================================
+3. PARÁMETROS DEL MÉTODO get_parameters()
+===============================================================================
+
+OBLIGATORIOS:
+- 'strategy_name': Nombre único de la estrategia
+- 'magic_number': Número mágico único (debe coincidir con self.magic_number)
+- 'description': Descripción clara de la estrategia
+
+OPCIONALES PERO RECOMENDADOS:
+- 'symbols': Lista de símbolos soportados ['EURUSD', 'GBPUSD', 'USDJPY']
+- 'close_before_open': bool - Si cerrar posiciones antes de abrir nuevas
+- 'max_open_positions': int - Máximo número de posiciones simultáneas
+- 'timeframe': Timeframe preferido (si no se especifica al crear bot)
+- 'symbol': Símbolo preferido (si no se especifica al crear bot)
+
+PARÁMETROS DE CONFIGURACIÓN ADICIONALES:
+- 'risk_per_trade': Riesgo por operación (%)
+- 'max_drawdown': Máximo drawdown permitido (%)
+- 'min_lot_size': Tamaño mínimo de lote
+- 'max_lot_size': Tamaño máximo de lote
+
+===============================================================================
+4. DATOS DISPONIBLES EN generate_signal()
+===============================================================================
+
+El parámetro 'data' es un pandas.DataFrame con las siguientes columnas:
+
+ESTÁNDAR (siempre disponibles):
+- 'time': Timestamp de la vela
+- 'open': Precio de apertura
+- 'high': Precio máximo
+- 'low': Precio mínimo
+- 'close': Precio de cierre
+- 'volume': Volumen (tick_volume)
+
+ÍNDICES:
+- current_index: Índice actual en el DataFrame
+- len(data): Total de velas disponibles
+
+EJEMPLOS DE USO:
+```python
+def generate_signal(self, data: pd.DataFrame, current_index: int) -> str:
+    if current_index < 20:  # Necesitamos al menos 20 velas
+        return 'hold'
+    
+    # Obtener precios actuales
+    current_close = data.iloc[current_index]['close']
+    previous_close = data.iloc[current_index-1]['close']
+    
+    # Calcular medias móviles
+    ma_20 = data['close'].iloc[current_index-19:current_index+1].mean()
+    ma_50 = data['close'].iloc[current_index-49:current_index+1].mean()
+    
+    # Tu lógica de señales aquí
+    if current_close > ma_20 and ma_20 > ma_50:
+        return 'buy'
+    elif current_close < ma_20 and ma_20 < ma_50:
+        return 'sell'
+    else:
+        return 'hold'
+```
+
+===============================================================================
+5. GESTIÓN DE POSICIONES - PARÁMETROS IMPORTANTES
+===============================================================================
+
+'close_before_open': bool
+    - True: Cierra posiciones existentes antes de abrir nuevas
+    - False: Permite múltiples posiciones simultáneas
+    - Recomendado: True para estrategias simples
+
+'max_open_positions': int
+    - Controla cuántas posiciones pueden estar abiertas simultáneamente
+    - Se aplica por magic_number (por estrategia)
+    - Recomendado: 1 para estrategias simples
+
+===============================================================================
+6. CÁLCULO DE TAMAÑO DE POSICIÓN - calculate_position_size()
+===============================================================================
+
+PARÁMETROS RECIBIDOS:
+- symbol: El símbolo para el que calcular (ej: "EURUSD")
+- equity: Capital actual de la cuenta
+- entry_price: Precio de entrada planificado
+
+MÉTODOS DE CÁLCULO COMUNES:
+
+1. LOTE FIJO:
+```python
+def calculate_position_size(self, symbol, equity, entry_price):
+    return 0.01  # Siempre 0.01 lotes
+```
+
+2. PORCENTAJE DEL CAPITAL:
+```python
+def calculate_position_size(self, symbol, equity, entry_price):
+    risk_percent = 0.02  # 2% del capital
+    risk_amount = equity * risk_percent
+    # Calcular lotes basado en el riesgo
+    return min(risk_amount / 1000, 0.1)  # Ejemplo simplificado
+```
+
+3. BASADO EN ATR (Average True Range):
+```python
+def calculate_position_size(self, symbol, equity, entry_price):
+    # Requiere calcular ATR en generate_signal y guardarlo
+    if hasattr(self, 'current_atr'):
+        risk_amount = equity * 0.01  # 1% de riesgo
+        position_size = risk_amount / (self.current_atr * 100)
+        return max(0.01, min(position_size, 0.1))
+    return 0.01
+```
+
+===============================================================================
+7. CÁLCULO DE STOP LOSS Y TAKE PROFIT - calculate_sl_tp()
+===============================================================================
+
+PARÁMETROS RECIBIDOS:
+- symbol: Símbolo del trade
+- action: 'buy' o 'sell'
+- entry_price: Precio de entrada
+
+RETORNA: Tuple[Optional[float], Optional[float]]
+- (stop_loss, take_profit)
+- Usar None si no quieres SL o TP
+
+MÉTODOS COMUNES:
+
+1. PIPS FIJOS:
+```python
+def calculate_sl_tp(self, symbol, action, entry_price):
+    pip_size = self.get_pip_size(symbol)
+    sl_pips = 50
+    tp_pips = 100
+    
+    if action.lower() == 'buy':
+        sl = entry_price - (sl_pips * pip_size)
+        tp = entry_price + (tp_pips * pip_size)
+    else:  # sell
+        sl = entry_price + (sl_pips * pip_size)
+        tp = entry_price - (tp_pips * pip_size)
+    
+    return sl, tp
+```
+
+2. PORCENTAJE DEL PRECIO:
+```python
+def calculate_sl_tp(self, symbol, action, entry_price):
+    sl_percent = 0.005  # 0.5%
+    tp_percent = 0.01   # 1%
+    
+    if action.lower() == 'buy':
+        sl = entry_price * (1 - sl_percent)
+        tp = entry_price * (1 + tp_percent)
+    else:  # sell
+        sl = entry_price * (1 + sl_percent)
+        tp = entry_price * (1 - tp_percent)
+    
+    return sl, tp
+```
+
+3. BASADO EN INDICADORES TÉCNICOS:
+```python
+def calculate_sl_tp(self, symbol, action, entry_price):
+    # Usar niveles de soporte/resistencia calculados en generate_signal
+    if hasattr(self, 'support_level') and hasattr(self, 'resistance_level'):
+        if action.lower() == 'buy':
+            sl = self.support_level
+            tp = self.resistance_level
+        else:  # sell
+            sl = self.resistance_level
+            tp = self.support_level
+        return sl, tp
+    
+    # Fallback a pips fijos
+    return self.calculate_fixed_sl_tp(symbol, action, entry_price)
+```
+
+===============================================================================
+8. MAGIC NUMBERS Y UNICIDAD
+===============================================================================
+
+IMPORTANTE: Cada estrategia debe tener un magic_number ÚNICO
+
+1. Revisar archivo magic_numbers.txt para ver números usados
+2. Elegir un número no utilizado
+3. Definirlo en __init__:
+   ```python
+   def __init__(self):
+       super().__init__()
+       self.magic_number = 999  # Tu número único
+   ```
+
+RANGOS SUGERIDOS:
+- 1-100: Estrategias básicas
+- 101-500: Estrategias intermedias  
+- 501-1000: Estrategias avanzadas
+- 1001+: Estrategias experimentales
+
+===============================================================================
+9. VARIABLES DE ESTADO Y PERSISTENCIA
+===============================================================================
+
+Puedes mantener estado entre llamadas usando variables de instancia:
+
+```python
+def __init__(self):
+    super().__init__()
+    self.magic_number = 999
+    
+    # Variables de estado
+    self.last_signal_time = None
+    self.position_count = 0
+    self.last_ma_crossover = None
+    self.trend_direction = 'neutral'
+
+def generate_signal(self, data, current_index):
+    # Usar y actualizar variables de estado
+    current_time = data.iloc[current_index]['time']
+    
+    if self.last_signal_time is None:
+        self.last_signal_time = current_time
+    
+    # Tu lógica aquí...
+    
+    # Actualizar estado
+    self.last_signal_time = current_time
+    return signal
+```
+
+===============================================================================
+10. INDICADORES TÉCNICOS COMUNES
+===============================================================================
+
+MEDIAS MÓVILES:
+```python
+# Media móvil simple
+ma_period = 20
+ma = data['close'].iloc[current_index-ma_period+1:current_index+1].mean()
+
+# Media móvil exponencial (requiere pandas)
+import pandas as pd
+ema = data['close'].ewm(span=20).mean().iloc[current_index]
+```
+
+RSI (Relative Strength Index):
+```python
+def calculate_rsi(self, prices, period=14):
+    delta = prices.diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+    return rsi
+```
+
+BANDAS DE BOLLINGER:
+```python
+def calculate_bollinger_bands(self, prices, period=20, std_dev=2):
+    ma = prices.rolling(window=period).mean()
+    std = prices.rolling(window=period).std()
+    upper_band = ma + (std * std_dev)
+    lower_band = ma - (std * std_dev)
+    return upper_band, ma, lower_band
+```
+
+===============================================================================
+11. MANEJO DE ERRORES Y VALIDACIONES
+===============================================================================
+
+```python
+def generate_signal(self, data, current_index):
+    try:
+        # Validaciones básicas
+        if current_index >= len(data):
+            return 'hold'
+        
+        if current_index < self.minimum_bars_required:
+            return 'hold'
+        
+        # Tu lógica aquí
+        signal = 'hold'
+        
+        # Validar señal
+        if signal not in ['buy', 'sell', 'hold']:
+            return 'hold'
+        
+        return signal
+        
+    except Exception as e:
+        print(f"Error en generate_signal: {e}")
+        return 'hold'  # Siempre retornar algo válido
+```
+
+===============================================================================
+12. EJEMPLO COMPLETO: ESTRATEGIA DE CRUCE DE MEDIAS MÓVILES
+===============================================================================
+
+```python
+from strategies.strategy_base import StrategyBase
+import pandas as pd
+from typing import Optional, Tuple
+
+class MovingAverageCrossStrategy(StrategyBase):
+    def __init__(self):
+        super().__init__()
+        self.magic_number = 200  # Número único
+        
+        # Parámetros de la estrategia
+        self.fast_ma_period = 10
+        self.slow_ma_period = 20
+        
+        # Variables de estado
+        self.last_signal = 'hold'
+        self.last_cross_time = None
+
+    def generate_signal(self, data: pd.DataFrame, current_index: int) -> str:
+        try:
+            # Validaciones
+            if current_index < self.slow_ma_period:
+                return 'hold'
+            
+            # Calcular medias móviles
+            fast_ma = data['close'].iloc[current_index-self.fast_ma_period+1:current_index+1].mean()
+            slow_ma = data['close'].iloc[current_index-self.slow_ma_period+1:current_index+1].mean()
+            
+            # MA anterior para detectar cruces
+            prev_fast = data['close'].iloc[current_index-self.fast_ma_period:current_index].mean()
+            prev_slow = data['close'].iloc[current_index-self.slow_ma_period:current_index].mean()
+            
+            # Detectar cruces
+            if prev_fast <= prev_slow and fast_ma > slow_ma:
+                # Cruce alcista
+                self.last_signal = 'buy'
+                self.last_cross_time = data.iloc[current_index]['time']
+                return 'buy'
+            elif prev_fast >= prev_slow and fast_ma < slow_ma:
+                # Cruce bajista  
+                self.last_signal = 'sell'
+                self.last_cross_time = data.iloc[current_index]['time']
+                return 'sell'
+            else:
+                return 'hold'
+                
+        except Exception as e:
+            print(f"Error en MovingAverageCrossStrategy: {e}")
+            return 'hold'
+
+    def get_parameters(self) -> dict:
+        return {
+            'strategy_name': 'MovingAverageCrossStrategy',
+            'magic_number': self.magic_number,
+            'description': f'Cruce de MA {self.fast_ma_period}/{self.slow_ma_period}',
+            
+            # Símbolos soportados
+            'symbols': ['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD'],
+            
+            # Gestión de posiciones
+            'close_before_open': True,
+            'max_open_positions': 1,
+            
+            # Parámetros específicos
+            'fast_ma_period': self.fast_ma_period,
+            'slow_ma_period': self.slow_ma_period,
+        }
+
+    def calculate_position_size(self, symbol: str, equity: float, entry_price: float) -> float:
+        # 1% de riesgo por operación
+        risk_percent = 0.01
+        base_lot = 0.01
+        
+        # Ajustar basado en el capital
+        if equity > 1000:
+            return min(equity * risk_percent / 1000 * base_lot, 0.1)
+        else:
+            return base_lot
+
+    def calculate_sl_tp(self, symbol: str, action: str, entry_price: float) -> Tuple[Optional[float], Optional[float]]:
+        pip_size = self.get_pip_size(symbol)
+        
+        # SL y TP basados en los períodos de las MAs
+        sl_pips = self.slow_ma_period * 2  # SL dinámico
+        tp_pips = sl_pips * 2  # Risk:Reward 1:2
+        
+        if action.lower() == 'buy':
+            sl = entry_price - (sl_pips * pip_size)
+            tp = entry_price + (tp_pips * pip_size)
+        else:  # sell
+            sl = entry_price + (sl_pips * pip_size)
+            tp = entry_price - (tp_pips * pip_size)
+        
+        return sl, tp
+```
+
+===============================================================================
+13. TESTING Y VALIDACIÓN
+===============================================================================
+
+Para probar tu estrategia:
+
+1. Crear archivo en strategies/your_strategy.py
+2. Ejecutar test: python utils/strategy_discovery.py
+3. Verificar que aparezca en la lista
+4. Probar con backtesting: usar unified_backtest_engine.py
+5. Probar en vivo: agregar a simple_trading_app.py
+
+===============================================================================
+14. ARCHIVOS A MODIFICAR/VERIFICAR
+===============================================================================
+
+OBLIGATORIO:
+- strategies/your_strategy.py (crear tu estrategia)
+- magic_numbers.txt (agregar tu número)
+
+OPCIONAL (para configuración específica):
+- simple_trading_app.py (si quieres configuración manual de bots)
+
+===============================================================================
+FIN DE LA GUÍA
+===============================================================================
+
+Esta guía cubre todo lo necesario para crear estrategias compatibles con el
+framework. El framework se encargará automáticamente de:
+
+- Detectar tu estrategia
+- Crear bots para los símbolos configurados  
+- Manejar la ejecución de trades
+- Gestionar stop loss y take profit
+- Logging y notificaciones
+- Pausa/reanudación de bots
+
+Solo necesitas enfocarte en la lógica de tu estrategia en los 4 métodos requeridos.

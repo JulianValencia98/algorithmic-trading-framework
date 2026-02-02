@@ -74,7 +74,7 @@ python tests/test_connect.py
 python simple_trading_app.py
 ```
 
-La aplicación iniciará con el bot por defecto (SimpleTime_EURUSD_M1) y mostrará una interfaz interactiva con comandos:
+La aplicación detectará automáticamente las estrategias disponibles y configurará los bots correspondientes, mostrando una interfaz interactiva con comandos:
 
 **Comandos disponibles:**
 - `status` - Muestra el estado de todos los bots con iconos
@@ -92,22 +92,22 @@ La aplicación iniciará con el bot por defecto (SimpleTime_EURUSD_M1) y mostrar
 **Ejemplo de sesión:**
 ```
 23/01/2026 08:33:08.574 > status
-Bot: SimpleTime_EURUSD_M1 - Estado: running ▶️ - Magic: 1
+Bot: StrategyName_SYMBOL_M1 - Estado: running ▶️ - Magic: 1
 
 23/01/2026 08:34:10.123 > pause
 Bots disponibles para pausar:
-1. SimpleTime_EURUSD_M1
+1. StrategyName_SYMBOL_M1
 Selecciona el número del bot (0 para cancelar): 1
-Bot 'SimpleTime_EURUSD_M1' pausado.
+Bot 'StrategyName_SYMBOL_M1' pausado.
 
 23/01/2026 08:35:20.456 > status
-Bot: SimpleTime_EURUSD_M1 - Estado: paused ⏸️ - Magic: 1
+Bot: StrategyName_SYMBOL_M1 - Estado: paused ⏸️ - Magic: 1
 
 23/01/2026 08:36:30.789 > resume
 Bots pausados:
-1. SimpleTime_EURUSD_M1
+1. StrategyName_SYMBOL_M1
 Selecciona el número del bot (0 para cancelar): 1
-Bot 'SimpleTime_EURUSD_M1' reanudado.
+Bot 'StrategyName_SYMBOL_M1' reanudado.
 ```
 ## Arquitectura Multi-Bot
 
@@ -133,14 +133,14 @@ import MetaTrader5 as mt5
 bt = BasicTrading()
 app_director = AppDirector(bt)
 
-# Agregar bot único (auto-genera bot_id, usa magic_number de estrategia)
-bot1 = BotConfig(SimpleTimeStrategy(), "EURUSD", mt5.TIMEFRAME_M1, 60)
+# Agregar bot dinámico (auto-genera bot_id, usa magic_number de estrategia)
+bot1 = BotConfig(YourStrategy(), "SYMBOL", mt5.TIMEFRAME_M1, 60)
 
-app_director.add_bot(bot1)  # bot_id: SimpleTime_EURUSD_M1, magic: 1
+app_director.add_bot(bot1)  # bot_id: YourStrategy_SYMBOL_M1, magic: X
 
 # Control programático
-app_director.pause_bot("SimpleTime_EURUSD_M1")  # Pausa el bot
-app_director.resume_bot("SimpleTime_EURUSD_M1")  # Reanuda el bot
+app_director.pause_bot("YourStrategy_SYMBOL_M1")  # Pausa el bot
+app_director.resume_bot("YourStrategy_SYMBOL_M1")  # Reanuda el bot
 status = app_director.get_all_bots_status()
 app_director.stop_all_bots()
 bt.shutdown()
@@ -172,11 +172,12 @@ El framework incluye un **sistema inteligente de pausa global** que automáticam
 ### Ejemplo de uso
 ```python
 # Pausar todos los bots → Sistema se pausa globalmente
-app_director.pause_bot("SimpleTime_EURUSD_M1")
+app_director.pause_bot("Strategy1_SYMBOL1_M1")
+app_director.pause_bot("Strategy2_SYMBOL2_H1")
 # → Automáticamente: Sin eventos, notificaciones ni logging
 
 # Reanudar un bot → Sistema se reanuda globalmente
-app_director.resume_bot("SimpleTime_EURUSD_M1")
+app_director.resume_bot("Strategy1_SYMBOL1_M1")
 # → Automáticamente: Vuelven todos los eventos, notificaciones y logging
 ```
 

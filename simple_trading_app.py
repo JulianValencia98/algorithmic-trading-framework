@@ -6,6 +6,7 @@ from Easy_Trading import BasicTrading
 from trading_director.app_director import AppDirector, BotConfig
 from strategies.simple_time_strategy import SimpleTimeStrategy
 from utils.utils import Utils
+from utils.strategy_discovery import StrategyDiscovery
 
 
 def print_help():
@@ -186,29 +187,79 @@ def handle_commands(app_director: AppDirector, bt: BasicTrading):
             print(f"Error procesando comando: {e}")
 
 
+def create_default_bots() -> list:
+    """
+    Crea bots por defecto basados en las estrategias disponibles.
+    
+    Returns:
+        Lista de BotConfig para las estrategias encontradas
+    """
+    bots = []
+    strategies = StrategyDiscovery.get_all_strategies()
+    strategy_symbols = StrategyDiscovery.get_strategy_symbols()
+    
+    print(f"{Utils.dateprint()} - Detectando estrategias disponibles...")
+    StrategyDiscovery.print_strategy_info()
+    
+    for strategy_name, strategy_class in strategies.items():
+        symbols = strategy_symbols.get(strategy_name, ['EURUSD'])  # Default fallback
+        
+        # Crear un bot por cada símbolo de la estrategia
+        for symbol in symbols:
+            try:
+                strategy_instance = strategy_class()
+                params = strategy_instance.get_parameters()
+                
+                # Configuración por defecto del bot
+                bot = BotConfig(
+                    strategy=strategy_instance,
+                    symbol=symbol,
+                    timeframe=mt5.TIMEFRAME_M1,  # Timeframe por defecto
+                    interval_seconds=60,
+                    data_points=100
+                )
+                
+                bots.append(bot)
+                print(f"   📊 Bot creado: {bot.bot_id} (Magic: {strategy_instance.magic_number})")
+                
+            except Exception as e:
+                print(f"   ❌ Error creando bot para {strategy_name}-{symbol}: {e}")
+    
+    return bots
+
+
 def main():
+    """Función principal que inicializa el framework con detección automática de estrategias."""
     # Inicializar componentes compartidos
     bt = BasicTrading()
     app_director = AppDirector(bt, notification_service=None)
     
-    print(f"{Utils.dateprint()} - Iniciando App Director con múltiples bots...\n")
-    
-    # Bot 1: SimpleTimeStrategy en EURUSD M1
-    bot1 = BotConfig(
-        strategy=SimpleTimeStrategy(),
-        symbol="EURUSD",
-        timeframe=mt5.TIMEFRAME_M1,
-        interval_seconds=60,
-        data_points=100
-    )
-    
-    # Agregar y arrancar solo el bot EURUSD
-    app_director.add_bot(bot1)
-    
-    print(f"{Utils.dateprint()} - Bots activos: {app_director.list_bots()}")
-    print(f"{Utils.dateprint()} - Escribe 'help' para ver comandos disponibles.\n")
+    print(f"{Utils.dateprint()} - Iniciando App Director con detección automática de estrategias...\n")
     
     try:
+        # Crear bots automáticamente basados en estrategias disponibles
+        default_bots = create_default_bots()
+        
+        if not default_bots:
+            print("❌ No se encontraron estrategias válidas. Creando bot de respaldo...")
+            # Crear bot de respaldo si no hay estrategias
+            fallback_bot = BotConfig(
+                strategy=SimpleTimeStrategy(),
+                symbol="EURUSD",
+                timeframe=mt5.TIMEFRAME_M1,
+                interval_seconds=60,
+                data_points=100
+            )
+            default_bots = [fallback_bot]
+        
+        # Agregar todos los bots detectados
+        for bot in default_bots:
+            app_director.add_bot(bot)
+        
+        print(f"\n{Utils.dateprint()} - Bots activos: {app_director.list_bots()}")
+        print(f"{Utils.dateprint()} - Total de {len(default_bots)} bot(s) configurado(s)")
+        print(f"{Utils.dateprint()} - Escribe 'help' para ver comandos disponibles.\n")
+        
         # Iniciar interfaz de comandos (bloqueante)
         handle_commands(app_director, bt)
     
@@ -217,6 +268,14 @@ def main():
         app_director.stop_all_bots()
         bt.shutdown()
         print(f"{Utils.dateprint()} - Finalizado correctamente.")
+    
+    except Exception as e:
+        print(f"❌ Error crítico en main: {e}")
+        try:
+            app_director.stop_all_bots()
+            bt.shutdown()
+        except:
+            pass
 
 
 if __name__ == "__main__":
