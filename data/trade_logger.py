@@ -87,6 +87,14 @@ class TradeLogger:
             market_context=json.dumps(market_context) if market_context else None,
         )
         
+        # Verificar pausa global antes de guardar
+        try:
+            from utils.global_state import global_state
+            if global_state.should_skip_action("log"):
+                return 0  # Saltar logging si está pausado globalmente
+        except ImportError:
+            pass  # Continuar si no está disponible global_state
+        
         trade_id = self.repository.save_trade(trade)
         print(f"{Utils.dateprint()} - [TradeLogger] Trade #{ticket} logged (ID: {trade_id})")
         
@@ -134,6 +142,14 @@ class TradeLogger:
         trade.closed_at = datetime.now()
         trade.status = TradeStatus.CLOSED
         trade.close_reason = close_reason
+        
+        # Verificar pausa global antes de actualizar
+        try:
+            from utils.global_state import global_state
+            if global_state.should_skip_action("log"):
+                return False  # Saltar logging si está pausado globalmente
+        except ImportError:
+            pass  # Continuar si no está disponible global_state
         
         success = self.repository.update_trade(trade)
         
@@ -187,6 +203,14 @@ class TradeLogger:
             skip_reason=skip_reason,
             indicators_snapshot=json.dumps(indicators_snapshot) if indicators_snapshot else None,
         )
+        
+        # Verificar pausa global antes de guardar señal
+        try:
+            from utils.global_state import global_state
+            if global_state.should_skip_action("log"):
+                return 0  # Saltar logging si está pausado globalmente
+        except ImportError:
+            pass  # Continuar si no está disponible global_state
         
         return self.repository.save_signal(signal)
     

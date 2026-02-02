@@ -184,6 +184,14 @@ def on_signal_generated(
     **kwargs
 ):
     """Helper para emitir evento de señal generada."""
+    # Verificar pausa global antes de emitir
+    try:
+        from utils.global_state import global_state
+        if global_state.should_skip_action("event"):
+            return  # Saltar evento si está pausado globalmente
+    except ImportError:
+        pass  # Continuar si no está disponible global_state
+    
     event_bus.emit(
         EventType.SIGNAL_GENERATED,
         {
@@ -210,6 +218,14 @@ def on_trade_opened(
     **kwargs
 ):
     """Helper para emitir evento de trade abierto."""
+    # Verificar pausa global antes de emitir
+    try:
+        from utils.global_state import global_state
+        if global_state.should_skip_action("event"):
+            return  # Saltar evento si está pausado globalmente
+    except ImportError:
+        pass  # Continuar si no está disponible global_state
+    
     event_bus.emit(
         EventType.TRADE_OPENED,
         {
@@ -236,6 +252,14 @@ def on_trade_closed(
     **kwargs
 ):
     """Helper para emitir evento de trade cerrado."""
+    # Verificar pausa global antes de emitir
+    try:
+        from utils.global_state import global_state
+        if global_state.should_skip_action("event"):
+            return  # Saltar evento si está pausado globalmente
+    except ImportError:
+        pass  # Continuar si no está disponible global_state
+    
     event_bus.emit(
         EventType.TRADE_CLOSED,
         {

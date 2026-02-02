@@ -12,6 +12,7 @@ from data.trade_logger import TradeLogger
 from data.trade_sync_service import TradeSyncService
 from events.event_bus import on_bot_status_change
 from utils.utils import Utils
+from utils.global_state import global_state
 
 
 class BotConfig:
@@ -282,13 +283,30 @@ class AppDirector:
             if config.bot_id in self.active_bots:
                 self.active_bots[config.bot_id]['status'] = 'stopped'
     
+    def _check_global_pause(self):
+        """Verifica si todos los bots están pausados y actualiza el flag global_paused."""
+        with self.lock:
+            all_paused = all(
+                info['status'] == 'paused' for info in self.active_bots.values() if info['status'] != 'stopped'
+            ) and len(self.active_bots) > 0
+            if all_paused and not self.global_paused:
+                self.global_paused = True
+                global_state.set_globally_paused(True)
+                print(f"{Utils.dateprint()} - [AppDirector] Todos los bots están pausados. Pausando envío/pedido de información global.")
+            elif not all_paused and self.global_paused:
+                self.global_paused = False
+                global_state.set_globally_paused(False)
+                print(f"{Utils.dateprint()} - [AppDirector] Al menos un bot reanudado. Reanudando envío/pedido de información global.")
+
+    def is_globally_paused(self) -> bool:
+        """Devuelve True si el sistema está globalmente pausado."""
+        return self.global_paused
+
     def pause_bot(self, bot_id: str) -> bool:
         """
         Pausa un bot específico.
-        
         Args:
             bot_id: ID del bot a pausar
-            
         Returns:
             True si se pausó exitosamente, False si no existe o ya está pausado
         """
@@ -296,30 +314,24 @@ class AppDirector:
             if bot_id not in self.active_bots:
                 print(f"{Utils.dateprint()} - ERROR: Bot '{bot_id}' no existe.")
                 return False
-            
             bot_info = self.active_bots[bot_id]
-            
             if bot_info['status'] == 'paused':
                 print(f"{Utils.dateprint()} - Bot '{bot_id}' ya está pausado.")
                 return True
-            
             # Pausar el bot
             bot_info['pause_event'].clear()  # Pausar
             bot_info['status'] = 'paused'
             print(f"{Utils.dateprint()} - Bot '{bot_id}' pausado.")
-            
             # Emit event
             on_bot_status_change(bot_id, 'paused')
-        
+        self._check_global_pause()
         return True
-    
+
     def resume_bot(self, bot_id: str) -> bool:
         """
         Reanuda un bot pausado.
-        
         Args:
             bot_id: ID del bot a reanudar
-            
         Returns:
             True si se reanudó exitosamente, False si no existe o no está pausado
         """
@@ -327,21 +339,17 @@ class AppDirector:
             if bot_id not in self.active_bots:
                 print(f"{Utils.dateprint()} - ERROR: Bot '{bot_id}' no existe.")
                 return False
-            
             bot_info = self.active_bots[bot_id]
-            
             if bot_info['status'] != 'paused':
                 print(f"{Utils.dateprint()} - Bot '{bot_id}' no está pausado (status: {bot_info['status']}).")
                 return False
-            
             # Reanudar el bot
             bot_info['pause_event'].set()  # Reanudar
             bot_info['status'] = 'running'
             print(f"{Utils.dateprint()} - Bot '{bot_id}' reanudado.")
-            
             # Emit event
             on_bot_status_change(bot_id, 'resumed')
-        
+        self._check_global_pause()
         return True
     
     

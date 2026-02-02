@@ -42,4 +42,12 @@ class NotificationService:
             title (str): The title of the notification.
             message (str): The message of the notification.
         """
+        # Verificar pausa global antes de enviar
+        try:
+            from utils.global_state import global_state
+            if global_state.should_skip_action("notification"):
+                return  # Saltar notificación si está pausado globalmente
+        except ImportError:
+            pass  # Continuar si no está disponible global_state
+        
         self._channel.send_message(title, message)
