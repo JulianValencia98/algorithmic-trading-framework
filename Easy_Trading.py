@@ -927,20 +927,31 @@ class BasicTrading:
             # Check if algo trading is enabled in terminal
             terminal_info = mt5.terminal_info()
             if terminal_info is None:
+                print(f"{Utils.dateprint()} - WARNING: MT5 terminal not connected")
                 return False
             if not terminal_info.trade_allowed:
+                print(f"{Utils.dateprint()} - WARNING: Algorithmic trading not allowed in terminal")
                 return False
             
-            info = mt5.symbol_info(symbol)
+            # Try to find symbol with various suffixes/formats
+            info = self._find_symbol_info(symbol)
             if info is None:
-                raise Exception(f"Symbol {symbol} not found. MT5 error: {mt5.last_error()}")
+                print(f"{Utils.dateprint()} - ERROR: Symbol {symbol} not found in any format. Available symbols: {self._get_sample_symbols()}")
+                return False
+            
+            actual_symbol = info.name
+            print(f"{Utils.dateprint()} - Using symbol: {actual_symbol} (requested: {symbol})")
+            
             # Ensure symbol visible
             if not info.visible:
-                if not mt5.symbol_select(symbol, True):
-                    raise Exception(f"Unable to select {symbol}. MT5 error: {mt5.last_error()}")
+                if not mt5.symbol_select(actual_symbol, True):
+                    print(f"{Utils.dateprint()} - ERROR: Unable to select {actual_symbol}. MT5 error: {mt5.last_error()}")
+                    return False
+                print(f"{Utils.dateprint()} - Symbol {actual_symbol} made visible")
             
             # Check if trading is disabled for this symbol
             if info.trade_mode == mt5.SYMBOL_TRADE_MODE_DISABLED:
+                print(f"{Utils.dateprint()} - WARNING: Trading disabled for {actual_symbol}")
                 return False
             
             # Check tick data
@@ -986,3 +997,107 @@ class BasicTrading:
         except Exception as e:
             print(f"{Utils.dateprint()} - ERROR: Failed to check market open for {symbol}. Exception: {e}")
             return False
+
+    def _find_symbol_info(self, symbol: str):
+        """
+        Tries to find symbol info with various suffix/format variations.
+        
+        Args:
+            symbol (str): Base symbol name (e.g., 'EURUSD')
+            
+        Returns:
+            Symbol info object or None if not found
+        """
+        # Common symbol variations used by different brokers
+        variations = [
+            symbol,                     # Original (EURUSD)
+            symbol + "m",              # Micro lots (EURUSDm)
+            symbol + ".c",             # CFD (EURUSD.c)
+            symbol + ".",              # With dot (EURUSD.)
+            symbol + "#",              # Hash suffix (EURUSD#)
+            "#" + symbol,              # Hash prefix (#EURUSD)
+            symbol + "_",              # Underscore (EURUSD_)
+            symbol + "pro",            # Pro account (EURUSDpro)
+            symbol.lower(),            # Lowercase (eurusd)
+            symbol.upper(),            # Uppercase (just in case)
+            symbol + "c",              # Alternative CFD (EURUSLDc)
+            symbol + "ecn",            # ECN (EURUSDzn)
+            "." + symbol,              # Dot prefix (.EURUSD)
+        ]
+        
+        for variant in variations:
+            try:
+                info = mt5.symbol_info(variant)
+                if info is not None:
+                    return info
+            except:
+                continue
+        
+        # If no exact variations found, try partial match in all symbols
+        return self._search_symbol_by_pattern(symbol)
+    
+    def _search_symbol_by_pattern(self, symbol: str):
+        """
+        Searches for symbols containing the pattern in available symbols list.
+        
+        Args:
+            symbol (str): Symbol pattern to search
+            
+        Returns:
+            First matching symbol info or None
+        """
+        try:
+            all_symbols = mt5.symbols_get()
+            if not all_symbols:
+                return None
+            
+            symbol_upper = symbol.upper()
+            
+            # First try exact matches
+            for sym in all_symbols:
+                if sym.name.upper() == symbol_upper:
+                    return sym
+            
+            # Then try contains matches
+            for sym in all_symbols:
+                if symbol_upper in sym.name.upper():
+                    # Prefer forex pairs (6-8 characters typically)
+                    if len(sym.name) <= 10:
+                        return sym
+            
+            return None
+        except:
+            return None
+    
+    def _get_sample_symbols(self, limit: int = 5) -> str:
+        """
+        Gets a sample of available symbols for debugging.
+        
+        Args:
+            limit (int): Number of symbols to return
+            
+        Returns:
+            Comma-separated string of sample symbols
+        """
+        try:
+            symbols = mt5.symbols_get()
+            if not symbols:
+                return "No symbols available"
+            
+            # Get first few forex pairs for reference
+            forex_symbols = []
+            for sym in symbols:
+                name = sym.name
+                # Typical forex pair patterns
+                if len(name) in [6, 7, 8] and any(curr in name.upper() for curr in ['EUR', 'USD', 'GBP', 'JPY']):
+                    forex_symbols.append(name)
+                    if len(forex_symbols) >= limit:
+                        break
+            
+            if forex_symbols:
+                return ", ".join(forex_symbols[:limit])
+            else:
+                # Return any symbols if no forex found
+                return ", ".join([sym.name for sym in symbols[:limit]])
+        except:
+            return "Error getting symbols"

@@ -24,8 +24,7 @@ class TradeSyncService:
     # Mapeo de magic numbers a nombres de estrategia
     MAGIC_TO_STRATEGY = {
         1: 'SimpleTimeStrategy',
-        2: 'SimpleTimeStrategyGBP',
-        3: 'SimpleTimeStrategyXAU',
+        # Agregar nuevas estrategias aquí
     }
     
     def __init__(

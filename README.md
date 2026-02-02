@@ -74,7 +74,7 @@ python tests/test_connect.py
 python simple_trading_app.py
 ```
 
-La aplicación iniciará con 3 bots por defecto (SimpleTime_EURUSD_M1, SimpleTimeGBP_GBPUSD_M1 y SimpleTimeXAU_XAUUSD_M1) y mostrará una interfaz interactiva con comandos:
+La aplicación iniciará con el bot por defecto (SimpleTime_EURUSD_M1) y mostrará una interfaz interactiva con comandos:
 
 **Comandos disponibles:**
 - `status` - Muestra el estado de todos los bots con iconos
@@ -93,21 +93,15 @@ La aplicación iniciará con 3 bots por defecto (SimpleTime_EURUSD_M1, SimpleTim
 ```
 23/01/2026 08:33:08.574 > status
 Bot: SimpleTime_EURUSD_M1 - Estado: running ▶️ - Magic: 1
-Bot: SimpleTimeGBP_GBPUSD_M1 - Estado: running ▶️ - Magic: 2
-Bot: SimpleTimeXAU_XAUUSD_M1 - Estado: running ▶️ - Magic: 3
 
 23/01/2026 08:34:10.123 > pause
 Bots disponibles para pausar:
 1. SimpleTime_EURUSD_M1
-2. SimpleTimeGBP_GBPUSD_M1
-3. SimpleTimeXAU_XAUUSD_M1
 Selecciona el número del bot (0 para cancelar): 1
 Bot 'SimpleTime_EURUSD_M1' pausado.
 
 23/01/2026 08:35:20.456 > status
 Bot: SimpleTime_EURUSD_M1 - Estado: paused ⏸️ - Magic: 1
-Bot: SimpleTimeGBP_GBPUSD_M1 - Estado: running ▶️ - Magic: 2
-Bot: SimpleTimeXAU_XAUUSD_M1 - Estado: running ▶️ - Magic: 3
 
 23/01/2026 08:36:30.789 > resume
 Bots pausados:
@@ -134,21 +128,15 @@ El framework utiliza `AppDirector` para gestionar múltiples bots de trading sim
 from Easy_Trading import BasicTrading
 from trading_director.app_director import AppDirector, BotConfig
 from strategies.simple_time_strategy import SimpleTimeStrategy
-from strategies.simple_time_strategy_gbp import SimpleTimeStrategyGBP
-from strategies.simple_time_strategy_xau import SimpleTimeStrategyXAU
 import MetaTrader5 as mt5
 
 bt = BasicTrading()
 app_director = AppDirector(bt)
 
-# Agregar múltiples bots (auto-genera bot_id, usa magic_number de estrategia)
+# Agregar bot único (auto-genera bot_id, usa magic_number de estrategia)
 bot1 = BotConfig(SimpleTimeStrategy(), "EURUSD", mt5.TIMEFRAME_M1, 60)
-bot2 = BotConfig(SimpleTimeStrategyGBP(), "GBPUSD", mt5.TIMEFRAME_M1, 60)
-bot3 = BotConfig(SimpleTimeStrategyXAU(), "XAUUSD", mt5.TIMEFRAME_M1, 60)
 
 app_director.add_bot(bot1)  # bot_id: SimpleTime_EURUSD_M1, magic: 1
-app_director.add_bot(bot2)  # bot_id: SimpleTimeGBP_GBPUSD_M1, magic: 2
-app_director.add_bot(bot3)  # bot_id: SimpleTimeXAU_XAUUSD_M1, magic: 3
 
 # Control programático
 app_director.pause_bot("SimpleTime_EURUSD_M1")  # Pausa el bot
@@ -185,8 +173,6 @@ El framework incluye un **sistema inteligente de pausa global** que automáticam
 ```python
 # Pausar todos los bots → Sistema se pausa globalmente
 app_director.pause_bot("SimpleTime_EURUSD_M1")
-app_director.pause_bot("SimpleTimeGBP_GBPUSD_M1")  
-app_director.pause_bot("SimpleTimeXAU_XAUUSD_M1")
 # → Automáticamente: Sin eventos, notificaciones ni logging
 
 # Reanudar un bot → Sistema se reanuda globalmente

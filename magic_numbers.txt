@@ -13,8 +13,8 @@ ESTRATEGIAS REGISTRADAS:
 ID   | Nombre de Estrategia      | Magic Number
 --------------------------------------------------
 0001 | SimpleTimeStrategy        | 1
-0002 | SimpleTimeStrategyGBP     | 2
-0003 | SimpleTimeStrategyXAU     | 3
+0002 | (Disponible)              | 2
+0003 | (Disponible)              | 3
 0004 | (Reservado)               | 4
 0005 | (Reservado)               | 5
 

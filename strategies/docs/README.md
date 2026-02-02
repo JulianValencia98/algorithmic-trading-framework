@@ -57,20 +57,6 @@ price = self.pips_to_price(entry_price, pips, action, pip_size)
 - **Sizing:** Fixed 0.05 lots
 - **SL/TP:** 100/300 pips
 
-### SimpleTimeStrategyGBP (Magic: 2)
-- **Símbolo:** GBPUSD
-- **Lógica:** Igual que SimpleTimeStrategy
-- **Position Management:** `close_before_open=True`
-- **Sizing:** Fixed 0.05 lots
-- **SL/TP:** 100/300 pips
-
-### SimpleTimeStrategyXAU (Magic: 3)
-- **Símbolo:** XAUUSD
-- **Lógica:** Igual que SimpleTimeStrategy
-- **Position Management:** `close_before_open=True`
-- **Sizing:** Fixed 0.01 lots (menor por volatilidad)
-- **SL/TP:** 100/300 pips
-
 ---
 
 ## Ejemplo: Estrategia con Kelly Criterion

@@ -5,8 +5,6 @@ from time import sleep
 from Easy_Trading import BasicTrading
 from trading_director.app_director import AppDirector, BotConfig
 from strategies.simple_time_strategy import SimpleTimeStrategy
-from strategies.simple_time_strategy_gbp import SimpleTimeStrategyGBP
-from strategies.simple_time_strategy_xau import SimpleTimeStrategyXAU
 from utils.utils import Utils
 
 
@@ -204,28 +202,8 @@ def main():
         data_points=100
     )
     
-    # Bot 2: SimpleTimeStrategyGBP en GBPUSD M1  
-    bot2 = BotConfig(
-        strategy=SimpleTimeStrategyGBP(),
-        symbol="GBPUSD",
-        timeframe=mt5.TIMEFRAME_M1,
-        interval_seconds=60,
-        data_points=100
-    )
-
-    # Bot 3: SimpleTimeStrategyXAU en XAUUSD M1
-    bot3 = BotConfig(
-        strategy=SimpleTimeStrategyXAU(),
-        symbol="XAUUSD",
-        timeframe=mt5.TIMEFRAME_M1,
-        interval_seconds=60,
-        data_points=100
-    )
-    
-    # Agregar y arrancar los bots
+    # Agregar y arrancar solo el bot EURUSD
     app_director.add_bot(bot1)
-    app_director.add_bot(bot2)
-    app_director.add_bot(bot3)
     
     print(f"{Utils.dateprint()} - Bots activos: {app_director.list_bots()}")
     print(f"{Utils.dateprint()} - Escribe 'help' para ver comandos disponibles.\n")

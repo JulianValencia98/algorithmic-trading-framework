@@ -27,8 +27,6 @@ backtesting/
 ├── data_manager.py               # Gestor de múltiples fuentes de datos
 ├── oanda_examples.py            # Ejemplos de uso
 ├── simple_time_strategy_bt.py   # ✅ Actualizado para Oanda
-├── simple_time_strategy_xau_bt.py # ✅ Actualizado para Oanda
-├── simple_time_strategy_gbp_bt.py # ✅ Actualizado para Oanda
 └── __init__.py                  # Exportaciones unificadas
 ```
 
@@ -99,12 +97,6 @@ results = run_backtest_with_oanda(
 ```bash
 # EURUSD con datos de Oanda
 python backtesting/simple_time_strategy_bt.py
-
-# XAUUSD con datos de Oanda
-python backtesting/simple_time_strategy_xau_bt.py
-
-# GBPUSD con datos de Oanda  
-python backtesting/simple_time_strategy_gbp_bt.py
 ```
 
 ## 🎯 Ejemplos Prácticos

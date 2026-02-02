@@ -30,24 +30,6 @@ from .simple_time_strategy_bt import (
     run_backtest_with_oanda
 )
 
-try:
-    from .simple_time_strategy_xau_bt import (
-        run_backtest_from_mt5 as run_xau_backtest_from_mt5,
-        run_backtest_with_oanda as run_xau_backtest_with_oanda
-    )
-except ImportError:
-    run_xau_backtest_from_mt5 = None
-    run_xau_backtest_with_oanda = None
-
-try:
-    from .simple_time_strategy_gbp_bt import (
-        run_backtest_from_mt5 as run_gbp_backtest_from_mt5,
-        run_backtest_with_oanda as run_gbp_backtest_with_oanda
-    )
-except ImportError:
-    run_gbp_backtest_from_mt5 = None
-    run_gbp_backtest_with_oanda = None
-
 __all__ = [
     "UnifiedBacktestingEngine",
     "run_strategy_backtest", 
@@ -55,9 +37,5 @@ __all__ = [
     "get_backtest_data",
     "BacktestingEngine",
     "run_backtest",
-    "run_backtest_with_oanda",
-    "run_xau_backtest_from_mt5",
-    "run_xau_backtest_with_oanda",
-    "run_gbp_backtest_from_mt5", 
-    "run_gbp_backtest_with_oanda"
+    "run_backtest_with_oanda"
 ]

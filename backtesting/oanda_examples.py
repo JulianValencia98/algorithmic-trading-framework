@@ -16,8 +16,6 @@ from backtesting import (
 
 # Importar estrategias
 from strategies.simple_time_strategy import SimpleTimeStrategy
-from strategies.simple_time_strategy_gbp import SimpleTimeStrategyGBP
-from strategies.simple_time_strategy_xau import SimpleTimeStrategyXAU
 
 from utils.utils import Utils
 
@@ -56,38 +54,6 @@ def run_single_backtest_example():
     )
     
     print_results(results, "SimpleTimeStrategy - EURUSD H1")
-    
-    # Test SimpleTimeStrategyXAU con XAUUSD
-    print("\n2. Testing SimpleTimeStrategyXAU con XAUUSD M15...")
-    results_xau = run_strategy_backtest(
-        strategy_class=SimpleTimeStrategyXAU,
-        symbol="XAUUSD",
-        timeframe="M15",
-        count=config["count"],
-        initial_capital=config["initial_capital"],
-        risk_per_trade=config["risk_per_trade"],
-        commission=config["commission"],
-        preferred_provider=config["preferred_provider"],
-        verbose=False  # Menos verbose para este
-    )
-    
-    print_results(results_xau, "SimpleTimeStrategyXAU - XAUUSD M15")
-    
-    # Test SimpleTimeStrategyGBP con GBPUSD
-    print("\n3. Testing SimpleTimeStrategyGBP con GBPUSD H4...")
-    results_gbp = run_strategy_backtest(
-        strategy_class=SimpleTimeStrategyGBP,
-        symbol="GBPUSD", 
-        timeframe="H4",
-        count=500,  # Menos velas para H4
-        initial_capital=config["initial_capital"],
-        risk_per_trade=config["risk_per_trade"],
-        commission=config["commission"],
-        preferred_provider=config["preferred_provider"],
-        verbose=False
-    )
-    
-    print_results(results_gbp, "SimpleTimeStrategyGBP - GBPUSD H4")
     
     print("\n=== FIN EJEMPLOS INDIVIDUALES ===")
 

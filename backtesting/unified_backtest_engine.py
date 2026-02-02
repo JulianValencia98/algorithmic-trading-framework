@@ -12,8 +12,6 @@ from datetime import datetime, timedelta
 
 # Importar strategies disponibles
 from strategies.simple_time_strategy import SimpleTimeStrategy
-from strategies.simple_time_strategy_gbp import SimpleTimeStrategyGBP
-from strategies.simple_time_strategy_xau import SimpleTimeStrategyXAU
 from strategies.strategy_base import StrategyBase
 
 # Importar data manager
