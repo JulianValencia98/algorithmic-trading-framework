@@ -133,16 +133,41 @@ class BasicTrading:
     def ensure_symbol_selected(self, symbol: str) -> None:
         """
         Ensures the trading symbol is selected/visible in MT5 Market Watch.
+        Uses _find_symbol_info to handle symbol suffixes correctly.
 
         Raises:
             Exception: If the symbol cannot be selected.
         """
         try:
-            if not mt5.symbol_select(symbol, True):
-                raise Exception(f"Unable to select symbol {symbol}. MT5 error: {mt5.last_error()}")
+            # Find the actual symbol with correct suffix
+            info = self._find_symbol_info(symbol)
+            if info is None:
+                raise Exception(f"Symbol {symbol} not found in any format")
+            
+            actual_symbol = info.name
+            print(f"{Utils.dateprint()} - Ensuring symbol {actual_symbol} (requested: {symbol}) is selected")
+            
+            if not mt5.symbol_select(actual_symbol, True):
+                raise Exception(f"Unable to select symbol {actual_symbol}. MT5 error: {mt5.last_error()}")
+                
         except Exception as e:
             print(f"{Utils.dateprint()} - ERROR: Failed to select symbol {symbol}. Exception: {e}")
             raise
+
+    def get_actual_symbol(self, symbol: str) -> str:
+        """
+        Helper method to get the actual symbol name with correct suffix.
+        
+        Args:
+            symbol (str): Requested symbol name
+            
+        Returns:
+            str: Actual symbol name with suffix (e.g., EURUSD.sml)
+        """
+        info = self._find_symbol_info(symbol)
+        if info is None:
+            raise Exception(f"Symbol {symbol} not found in any format")
+        return info.name
 
     def modify_orders(self, symbol: str, ticket: int, stop_loss: float = None, take_profit: float = None, type_order=mt5.ORDER_TYPE_BUY, type_fill=mt5.ORDER_FILLING_FOK) -> None:
         """
@@ -207,14 +232,15 @@ class BasicTrading:
         """
         try:
             self.ensure_symbol_selected(symbol)
+            actual_symbol = self.get_actual_symbol(symbol)
             rates = None
             for _ in range(3):
-                rates = mt5.copy_rates_from_pos(symbol, timeframe, 0, count)
+                rates = mt5.copy_rates_from_pos(actual_symbol, timeframe, 0, count)
                 if rates is not None:
                     break
                 time.sleep(0.5)
             if rates is None:
-                raise Exception(f"Failed to get rates for {symbol}. Error: {mt5.last_error()}")
+                raise Exception(f"Failed to get rates for {actual_symbol} (requested: {symbol}). Error: {mt5.last_error()}")
             table = pd.DataFrame(rates)
             table['time'] = pd.to_datetime(table['time'], unit='s')
             print(f"{Utils.dateprint()} - Data extracted successfully for {symbol}.")
@@ -350,12 +376,13 @@ class BasicTrading:
         """
         try:
             self.ensure_symbol_selected(symbol)
+            actual_symbol = self.get_actual_symbol(symbol)
             pos = mt5.positions_get(ticket=id_position)
             if pos is None or len(pos) == 0:
                 raise Exception(f"Position {id_position} not found. MT5 error: {mt5.last_error()}")
             current_volume = pos[0].volume
-            step = mt5.symbol_info(symbol).volume_step
-            min_lot = mt5.symbol_info(symbol).volume_min
+            step = mt5.symbol_info(actual_symbol).volume_step
+            min_lot = mt5.symbol_info(actual_symbol).volume_min
             volume = min(current_volume, volume_to_close)
             # Round volume to step
             if step and step > 0:
@@ -586,18 +613,19 @@ class BasicTrading:
             print(f"Leverage: {leverage}")
             invested_capital = capital * leverage * per_to_risk
             print(f"Leveraged Account Capital: {invested_capital}")
-            trade_size = mt5.symbol_info(symbol).trade_contract_size
+            actual_symbol = self.get_actual_symbol(symbol)
+            trade_size = mt5.symbol_info(actual_symbol).trade_contract_size
             print(f"Trade Size: {trade_size}")
-            price = (mt5.symbol_info(symbol).ask + mt5.symbol_info(symbol).bid) / 2
+            price = (mt5.symbol_info(actual_symbol).ask + mt5.symbol_info(actual_symbol).bid) / 2
             print(f"Price: {price}")
             lot_size = invested_capital / trade_size / price
             print(f"Lot size weighted by risk: {lot_size}")
-            min_lot = mt5.symbol_info(symbol).volume_min
+            min_lot = mt5.symbol_info(actual_symbol).volume_min
             print(f"Min Lot: {min_lot}")
-            max_lot = mt5.symbol_info(symbol).volume_max
+            max_lot = mt5.symbol_info(actual_symbol).volume_max
             print(f"Max Lot: {max_lot}")
 
-            step_lot = mt5.symbol_info(symbol).volume_step
+            step_lot = mt5.symbol_info(actual_symbol).volume_step
             print(f"Lot Step: {step_lot}")
 
             if lot_size <= min_lot:
@@ -635,14 +663,15 @@ class BasicTrading:
         """
         try:
             self.ensure_symbol_selected(symbol)
+            actual_symbol = self.get_actual_symbol(symbol)
             rates = None
             for _ in range(3):
-                rates = mt5.copy_rates_from_pos(symbol, timeframe, 0, count)
+                rates = mt5.copy_rates_from_pos(actual_symbol, timeframe, 0, count)
                 if rates is not None:
                     break
                 time.sleep(0.5)
             if rates is None:
-                raise Exception(f"Failed to get rates for {symbol}. Error: {mt5.last_error()}")
+                raise Exception(f"Failed to get rates for {actual_symbol} (requested: {symbol}). Error: {mt5.last_error()}")
             rates_frame = pd.DataFrame(rates)
             rates_frame['time'] = pd.to_datetime(rates_frame['time'], unit='s')
             data = rates_frame.copy()
@@ -690,16 +719,17 @@ class BasicTrading:
         """
         try:
             self.ensure_symbol_selected(symbol)
+            actual_symbol = self.get_actual_symbol(symbol)
             from_date = datetime(year_ini, month_ini, day_ini)
             to_date = datetime(year_fin, month_fin, day_fin)
             rates = None
             for _ in range(3):
-                rates = mt5.copy_rates_range(symbol, timeframe, from_date, to_date)
+                rates = mt5.copy_rates_range(actual_symbol, timeframe, from_date, to_date)
                 if rates is not None:
                     break
                 time.sleep(0.5)
             if rates is None:
-                raise Exception(f"Failed to get rates for {symbol}. Error: {mt5.last_error()}")
+                raise Exception(f"Failed to get rates for {actual_symbol} (requested: {symbol}). Error: {mt5.last_error()}")
             rates_frame = pd.DataFrame(rates)
             rates_frame['time'] = pd.to_datetime(rates_frame['time'], unit='s')
 
@@ -955,10 +985,12 @@ class BasicTrading:
                 return False
             
             # Check tick data
-            tick = mt5.symbol_info_tick(symbol)
+            tick = mt5.symbol_info_tick(actual_symbol)
             if tick is None:
+                print(f"{Utils.dateprint()} - WARNING: No tick data for {actual_symbol}")
                 return False
             if tick.time == 0:
+                print(f"{Utils.dateprint()} - WARNING: Invalid tick time for {actual_symbol}")
                 return False
             
             # Check if spread is available (usually 0 or very high when market closed)
