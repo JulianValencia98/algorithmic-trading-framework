@@ -102,13 +102,44 @@ class StrategyBase(ABC):
     def get_pip_size(symbol: str) -> float:
         """
         Helper: Get pip size for a symbol.
+        Uses symbol search to handle suffixes correctly.
         """
-        symbol_info = mt5.symbol_info(symbol)
-        if symbol_info is None:
-            return 0.0
-        if symbol_info.digits in (3, 5):
-            return symbol_info.point * 10
-        return symbol_info.point
+        try:
+            # Try to find symbol info with potential suffix
+            info = None
+            
+            # First try direct lookup
+            info = mt5.symbol_info(symbol)
+            
+            # If not found, try common suffixes
+            if info is None:
+                suffixes = ['.sml', '.raw', 'c', 'm', '', '.ecn', '.pro']
+                for suffix in suffixes:
+                    test_symbol = symbol + suffix
+                    info = mt5.symbol_info(test_symbol)
+                    if info is not None:
+                        break
+            
+            if info is None:
+                print(f"Warning: Symbol {symbol} not found for pip size calculation")
+                # Return default pip size based on symbol type
+                if 'JPY' in symbol:
+                    return 0.01  # JPY pairs typically have 2 decimal places
+                else:
+                    return 0.0001  # Most major pairs have 4 decimal places
+            
+            # Calculate pip size based on digits
+            if info.digits in (3, 5):
+                return info.point * 10
+            return info.point
+            
+        except Exception as e:
+            print(f"Error calculating pip size for {symbol}: {e}")
+            # Return conservative default
+            if 'JPY' in symbol:
+                return 0.01
+            else:
+                return 0.0001
     
     @staticmethod
     def get_symbol_info(symbol: str):

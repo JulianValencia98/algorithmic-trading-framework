@@ -57,8 +57,11 @@ class BotConfig:
         else:
             self.bot_id = bot_id
         
-        # Usar el magic number de la estrategia
-        self.magic_number = strategy.get_magic_number()
+        # Generar magic number único basado en estrategia + símbolo
+        # Esto permite que la misma estrategia opere en múltiples símbolos
+        base_magic = strategy.get_magic_number()
+        symbol_hash = hash(symbol) % 1000  # Hash del símbolo (0-999)
+        self.magic_number = base_magic * 1000 + abs(symbol_hash)
 
 
 class AppDirector:

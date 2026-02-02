@@ -70,7 +70,7 @@ class SimpleTimeStrategy(StrategyBase):
             'description': 'Opens buy position, waits 20 min, closes and reopens',
             
             # Símbolos soportados por esta estrategia
-            'symbols': ['EURUSD', 'GBPUSD', 'USDJPY'],  # Símbolos principales
+            'symbols': ['EURUSD'],  # Solo EURUSD
             
             # Position Management
             'close_before_open': False,  # No cerrar posiciones existentes

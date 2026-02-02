@@ -300,10 +300,12 @@ class BasicTrading:
         try:
             # Ensure symbol is selected
             self.ensure_symbol_selected(symbol)
+            actual_symbol = self.get_actual_symbol(symbol)
+            
             if (sl is None) and (tp is None):
                 order = {
                     "action": mt5.TRADE_ACTION_DEAL,
-                    "symbol": symbol,
+                    "symbol": actual_symbol,
                     "volume": volume,
                     "type": operation_type,
                     "magic": magic,
@@ -314,12 +316,12 @@ class BasicTrading:
                 result = mt5.order_send(order)
                 if result.retcode != mt5.TRADE_RETCODE_DONE:
                     raise Exception(f"Failed to open {operation_type} order. Error: {result}")
-                print(f"{Utils.dateprint()} - Opened {operation_type} with volume {volume}.")
+                print(f"{Utils.dateprint()} - Opened {operation_type} with volume {volume} for {actual_symbol}.")
 
             elif (sl is None) and (tp is not None):
                 order = {
                     "action": mt5.TRADE_ACTION_DEAL,
-                    "symbol": symbol,
+                    "symbol": actual_symbol,
                     "tp": tp,
                     "volume": volume,
                     "type": operation_type,
@@ -335,7 +337,7 @@ class BasicTrading:
             elif (sl is not None) and (tp is None):
                 order = {
                     "action": mt5.TRADE_ACTION_DEAL,
-                    "symbol": symbol,
+                    "symbol": actual_symbol,
                     "sl": sl,
                     "volume": volume,
                     "type": operation_type,
@@ -351,7 +353,7 @@ class BasicTrading:
             elif (sl is not None) and (tp is not None):
                 order = {
                     "action": mt5.TRADE_ACTION_DEAL,
-                    "symbol": symbol,
+                    "symbol": actual_symbol,
                     "sl": sl,
                     "tp": tp,
                     "volume": volume,
