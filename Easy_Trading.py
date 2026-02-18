@@ -24,6 +24,10 @@ class BasicTrading:
         self.mt5_password = os.getenv("MT5_PASSWORD")
         self.mt5_server = os.getenv("MT5_SERVER")
         self.mt5_timeout = int(os.getenv("MT5_TIMEOUT", 60000))  # Default timeout
+        # Optional broker-specific symbol prefix/suffix (for brokers like RoboForex)
+        # Example: MT5_SYMBOL_SUFFIX=".ecn" or MT5_SYMBOL_SUFFIX=".pro"
+        self.symbol_prefix = os.getenv("MT5_SYMBOL_PREFIX", "") or ""
+        self.symbol_suffix = os.getenv("MT5_SYMBOL_SUFFIX", "") or ""
         # Parse login safely
         login_raw = os.getenv("MT5_LOGIN")
         try:
@@ -1042,8 +1046,26 @@ class BasicTrading:
         Returns:
             Symbol info object or None if not found
         """
-        # Common symbol variations used by different brokers
-        variations = [
+        variations = []
+
+        # 1) Broker-specific prefix/suffix from env (e.g. RoboForex: ".ecn", ".pro", etc.)
+        #    Allows you to keep strategies using clean symbols like "EURUSD" while
+        #    automatically mapping to the broker's actual market-watch name.
+        custom_candidates = set()
+        try:
+            prefix = getattr(self, "symbol_prefix", "") or ""
+            suffix = getattr(self, "symbol_suffix", "") or ""
+        except AttributeError:
+            prefix, suffix = "", ""
+
+        if prefix or suffix:
+            base = symbol
+            custom_candidates.add(f"{prefix}{base}{suffix}")
+            custom_candidates.add(f"{base}{suffix}")
+            custom_candidates.add(f"{prefix}{base}")
+
+        # 2) Common symbol variations used by different brokers
+        common_variations = [
             symbol,                     # Original (EURUSD)
             symbol + "m",              # Micro lots (EURUSDm)
             symbol + ".c",             # CFD (EURUSD.c)
@@ -1052,12 +1074,24 @@ class BasicTrading:
             "#" + symbol,              # Hash prefix (#EURUSD)
             symbol + "_",              # Underscore (EURUSD_)
             symbol + "pro",            # Pro account (EURUSDpro)
-            symbol.lower(),            # Lowercase (eurusd)
-            symbol.upper(),            # Uppercase (just in case)
-            symbol + "c",              # Alternative CFD (EURUSLDc)
-            symbol + "ecn",            # ECN (EURUSDzn)
+            symbol + "pro-cent",       # Cent accounts with suffix (EURUSDpro-cent)
+            symbol + "cent",           # Cent accounts (EURUSDcent)
+            symbol + "fix",            # Fixed spread (EURUSDfix)
+            symbol + "ex",             # Some ECN/EX accounts (EURUSDex)
+            symbol.lower(),             # Lowercase (eurusd)
+            symbol.upper(),             # Uppercase
+            symbol + "c",              # Alternative CFD (EURUSDc)
+            symbol + "ecn",            # ECN (EURUSDecn)
             "." + symbol,              # Dot prefix (.EURUSD)
         ]
+
+        # Combine, keeping order: custom → common, removing duplicates while
+        # preserving insertion order.
+        seen = set()
+        for candidate in list(custom_candidates) + common_variations:
+            if candidate and candidate not in seen:
+                variations.append(candidate)
+                seen.add(candidate)
         
         for variant in variations:
             try:
