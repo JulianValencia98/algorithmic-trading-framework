@@ -12,6 +12,7 @@ from data.models.trade import Trade, TradeStatus
 from data.models.signal import Signal
 from data.repositories.trade_repository import TradeRepository
 from utils.utils import Utils
+from events.event_bus import on_trade_closed
 
 
 class TradeLogger:
@@ -156,6 +157,20 @@ class TradeLogger:
         if success:
             emoji = "✅" if profit > 0 else "❌"
             print(f"{Utils.dateprint()} - [TradeLogger] {emoji} Trade #{ticket} closed: ${profit:.2f} ({profit_pips:.1f} pips)")
+            
+            # Emitir evento de trade cerrado
+            try:
+                on_trade_closed(
+                    bot_id=trade.bot_id,
+                    ticket=trade.ticket,
+                    symbol=trade.symbol,
+                    profit=trade.profit or 0.0,
+                    close_reason=trade.close_reason or close_reason,
+                    profit_pips=trade.profit_pips,
+                    strategy_name=trade.strategy_name,
+                )
+            except Exception as e:
+                print(f"{Utils.dateprint()} - [TradeLogger] WARNING: Error emitting TRADE_CLOSED event for ticket {ticket}: {e}")
         
         return success
     

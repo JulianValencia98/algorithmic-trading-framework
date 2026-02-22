@@ -57,11 +57,10 @@ class BotConfig:
         else:
             self.bot_id = bot_id
         
-        # Generar magic number único basado en estrategia + símbolo
-        # Esto permite que la misma estrategia opere en múltiples símbolos
-        base_magic = strategy.get_magic_number()
-        symbol_hash = hash(symbol) % 1000  # Hash del símbolo (0-999)
-        self.magic_number = base_magic * 1000 + abs(symbol_hash)
+        # Magic number único por estrategia (compartido entre todos sus bots)
+        # Cada nueva estrategia debe definir su propio magic_number incremental
+        # (por ejemplo: 0001, 0002, 0003, ...)
+        self.magic_number = strategy.get_magic_number()
 
 
 class AppDirector:
@@ -98,6 +97,13 @@ class AppDirector:
         # Diccionario de bots activos: bot_id -> (thread, stop_event, director, config)
         self.active_bots: Dict[str, dict] = {}
         self.lock = threading.Lock()
+        # Estado de pausa global (False por defecto)
+        self.global_paused: bool = False
+        # Registrar AppDirector en el estado global para consultas centralizadas
+        try:
+            global_state.set_app_director(self)
+        except Exception as e:
+            print(f"{Utils.dateprint()} - WARNING: Could not register AppDirector in GlobalState: {e}")
     
     def _get_account_id(self) -> Optional[int]:
         """Obtiene el número de cuenta MT5."""
@@ -130,13 +136,17 @@ class AppDirector:
                 print(f"{Utils.dateprint()} - ERROR: Bot '{bot_config.bot_id}' ya existe.")
                 return False
             
-            # Verificar si ya existe un bot con el mismo magic_number
+            # Verificar si ya existe un bot con el mismo magic_number PERO de otra estrategia
             for existing_bot_id, bot_info in self.active_bots.items():
-                if bot_info['config'].magic_number == bot_config.magic_number:
-                    print(f"{Utils.dateprint()} - ERROR: Ya existe un bot con el mismo magic number ({bot_config.magic_number}).")
-                    print(f"  Bot existente: '{existing_bot_id}'")
-                    print(f"  Nuevo bot:     '{bot_config.bot_id}'")
-                    print(f"  Cada estrategia debe tener un magic number único.")
+                existing_config: BotConfig = bot_info['config']
+                if (
+                    existing_config.magic_number == bot_config.magic_number
+                    and existing_config.strategy.__class__ is not bot_config.strategy.__class__
+                ):
+                    print(f"{Utils.dateprint()} - ERROR: Ya existe una estrategia diferente con el mismo magic number ({bot_config.magic_number}).")
+                    print(f"  Bot existente: '{existing_bot_id}' ({existing_config.strategy.__class__.__name__})")
+                    print(f"  Nuevo bot:     '{bot_config.bot_id}' ({bot_config.strategy.__class__.__name__})")
+                    print("  Cada estrategia debe tener un magic number único.")
                     return False
             
             # Verificar si el mercado está abierto para el símbolo
@@ -355,7 +365,76 @@ class AppDirector:
         self._check_global_pause()
         return True
     
-    
+    def stop_bot(self, bot_id: str) -> bool:
+        """Detiene un bot específico sin afectar a los demás."""
+        with self.lock:
+            if bot_id not in self.active_bots:
+                print(f"{Utils.dateprint()} - ERROR: Bot '{bot_id}' no existe.")
+                return False
+            bot_info = self.active_bots[bot_id]
+            # Señalar detención y asegurar que no esté bloqueado en pausa
+            bot_info['stop_event'].set()
+            bot_info['pause_event'].set()
+            thread = bot_info['thread']
+        
+        # Esperar a que el thread termine
+        thread.join(timeout=5)
+        
+        with self.lock:
+            if bot_id in self.active_bots:
+                self.active_bots[bot_id]['status'] = 'stopped'
+        
+        on_bot_status_change(bot_id, 'stopped')
+        self._check_global_pause()
+        print(f"{Utils.dateprint()} - Bot '{bot_id}' detenido.")
+        return True
+
+    def restart_bot(self, bot_id: str) -> bool:
+        """Reinicia un bot: lo detiene y vuelve a arrancar su loop."""
+        with self.lock:
+            if bot_id not in self.active_bots:
+                print(f"{Utils.dateprint()} - ERROR: Bot '{bot_id}' no existe.")
+                return False
+            bot_info = self.active_bots[bot_id]
+            config: BotConfig = bot_info['config']
+        
+        # Detener el bot actual (si está corriendo o pausado)
+        self.stop_bot(bot_id)
+        
+        # Crear nuevo director y eventos para este bot reutilizando su configuración
+        director = SimpleTradingDirector(
+            self.basic_trading,
+            config.strategy,
+            notification_service=self.notification_service,
+            magic_number=config.magic_number,
+            trade_logger=self.trade_logger,
+            bot_id=config.bot_id,
+        )
+        stop_event = threading.Event()
+        pause_event = threading.Event()
+        pause_event.set()  # Arrancar en modo running
+        thread = threading.Thread(
+            target=self._run_bot,
+            args=(config, director, stop_event, pause_event),
+            daemon=True,
+            name=f"Bot-{config.bot_id}",
+        )
+
+        with self.lock:
+            if bot_id not in self.active_bots:
+                # El bot pudo haber sido removido externamente
+                print(f"{Utils.dateprint()} - WARNING: Bot '{bot_id}' fue removido antes de reiniciar.")
+                return False
+            self.active_bots[bot_id]['thread'] = thread
+            self.active_bots[bot_id]['stop_event'] = stop_event
+            self.active_bots[bot_id]['pause_event'] = pause_event
+            self.active_bots[bot_id]['director'] = director
+            self.active_bots[bot_id]['status'] = 'starting'
+
+        thread.start()
+        print(f"{Utils.dateprint()} - Bot '{bot_id}' reiniciado.")
+        return True
+
     def stop_all_bots(self):
         """Detiene todos los bots activos completamente (solo al salir del programa)."""
         # Detener el servicio de sincronización
