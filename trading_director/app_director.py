@@ -1,3 +1,5 @@
+import json
+import os
 import threading
 import time
 from typing import Dict, Optional
@@ -99,11 +101,21 @@ class AppDirector:
         self.lock = threading.Lock()
         # Estado de pausa global (False por defecto)
         self.global_paused: bool = False
+        # Evento para detener el thread de comandos
+        self._commands_stop_event = threading.Event()
         # Registrar AppDirector en el estado global para consultas centralizadas
         try:
             global_state.set_app_director(self)
         except Exception as e:
             print(f"{Utils.dateprint()} - WARNING: Could not register AppDirector in GlobalState: {e}")
+        
+        # Iniciar thread que procesa comandos externos (desde Streamlit)
+        self._commands_thread = threading.Thread(
+            target=self._process_commands_loop,
+            daemon=True,
+            name="CommandsProcessor"
+        )
+        self._commands_thread.start()
     
     def _get_account_id(self) -> Optional[int]:
         """Obtiene el número de cuenta MT5."""
@@ -116,6 +128,96 @@ class AppDirector:
         except Exception as e:
             print(f"{Utils.dateprint()} - WARNING: Could not get account ID: {e}")
             return None
+    
+    def _write_state_file(self):
+        """Escribe el estado actual de los bots a un archivo JSON para compartir entre procesos."""
+        try:
+            state_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'bots_state.json')
+            with self.lock:
+                state = {
+                    'global_paused': self.global_paused,
+                    'bots': []
+                }
+                for bot_id, bot_info in self.active_bots.items():
+                    config = bot_info['config']
+                    state['bots'].append({
+                        'bot_id': bot_id,
+                        'status': bot_info['status'],
+                        'symbol': config.symbol,
+                        'timeframe': config.timeframe,
+                        'interval_seconds': config.interval_seconds,
+                        'magic_number': config.magic_number,
+                        'is_alive': bot_info['thread'].is_alive() if bot_info.get('thread') else False
+                    })
+            with open(state_file, 'w') as f:
+                json.dump(state, f, indent=2)
+        except Exception as e:
+            print(f"{Utils.dateprint()} - WARNING: Could not write state file: {e}")
+    
+    def _process_commands_loop(self):
+        """Loop que procesa comandos externos cada 2 segundos."""
+        while not self._commands_stop_event.is_set():
+            try:
+                self._read_and_process_commands()
+            except Exception as e:
+                print(f"{Utils.dateprint()} - WARNING: Error processing commands: {e}")
+            # Esperar 2 segundos antes de volver a verificar
+            self._commands_stop_event.wait(2)
+    
+    def _read_and_process_commands(self):
+        """Lee y procesa comandos desde el archivo compartido."""
+        commands_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'bots_commands.json')
+        
+        if not os.path.exists(commands_file):
+            return
+        
+        try:
+            with open(commands_file, 'r') as f:
+                commands = json.load(f)
+            
+            # Borrar el archivo después de leer para evitar re-procesar
+            os.remove(commands_file)
+            
+            if not commands or not isinstance(commands, list):
+                return
+            
+            for cmd in commands:
+                action = cmd.get('action')
+                bot_id = cmd.get('bot_id')
+                
+                if not action:
+                    continue
+                
+                if action == 'pause' and bot_id:
+                    print(f"{Utils.dateprint()} - [Commands] Recibido comando PAUSE para {bot_id}")
+                    self.pause_bot(bot_id)
+                elif action == 'resume' and bot_id:
+                    print(f"{Utils.dateprint()} - [Commands] Recibido comando RESUME para {bot_id}")
+                    self.resume_bot(bot_id)
+                elif action == 'stop' and bot_id:
+                    print(f"{Utils.dateprint()} - [Commands] Recibido comando STOP para {bot_id}")
+                    self.stop_bot(bot_id)
+                elif action == 'restart' and bot_id:
+                    print(f"{Utils.dateprint()} - [Commands] Recibido comando RESTART para {bot_id}")
+                    self.restart_bot(bot_id)
+                elif action == 'pause_all':
+                    print(f"{Utils.dateprint()} - [Commands] Recibido comando PAUSE_ALL")
+                    for bid in self.list_bots():
+                        self.pause_bot(bid)
+                elif action == 'resume_all':
+                    print(f"{Utils.dateprint()} - [Commands] Recibido comando RESUME_ALL")
+                    for bid in self.list_bots():
+                        self.resume_bot(bid)
+                        
+        except json.JSONDecodeError as e:
+            # Archivo corrupto o vacío, ignorar
+            print(f"{Utils.dateprint()} - WARNING: JSON decode error in commands file: {e}")
+            try:
+                os.remove(commands_file)
+            except:
+                pass
+        except Exception as e:
+            print(f"{Utils.dateprint()} - WARNING: Error reading commands file: {e}")
     
     def add_bot(self, bot_config: BotConfig) -> bool:
         """
@@ -196,7 +298,9 @@ class AppDirector:
             if is_first_bot:
                 self.trade_sync_service.start()
             
-            return True
+        # Escribir estado a archivo (fuera del lock)
+        self._write_state_file()
+        return True
     
     def _run_bot(self, config: BotConfig, director: SimpleTradingDirector, stop_event: threading.Event, pause_event: threading.Event):
         """
@@ -215,6 +319,7 @@ class AppDirector:
         with self.lock:
             if config.bot_id in self.active_bots:
                 self.active_bots[config.bot_id]['status'] = 'running'
+        self._write_state_file()
         
         print(f"{Utils.dateprint()} - [{config.bot_id}] Iniciando loop - {config.symbol} {config.timeframe} (Magic: {config.magic_number})")
         
@@ -252,7 +357,10 @@ class AppDirector:
                     # Actualizar status a 'waiting_market'
                     with self.lock:
                         if config.bot_id in self.active_bots:
-                            self.active_bots[config.bot_id]['status'] = 'waiting_market'
+                            prev_status = self.active_bots[config.bot_id]['status']
+                            if prev_status != 'waiting_market':
+                                self.active_bots[config.bot_id]['status'] = 'waiting_market'
+                                self._write_state_file()
                     # Esperar el intervalo antes de verificar de nuevo (no saltar con continue)
                     for _ in range(config.interval_seconds):
                         if stop_event.is_set() or not pause_event.is_set():
@@ -264,6 +372,7 @@ class AppDirector:
                 with self.lock:
                     if config.bot_id in self.active_bots and self.active_bots[config.bot_id]['status'] == 'waiting_market':
                         self.active_bots[config.bot_id]['status'] = 'running'
+                        self._write_state_file()
                         print(f"{Utils.dateprint()} - [{config.bot_id}] ✅ Mercado abierto. Reanudando operaciones.")
                 
                 # Ejecutar estrategia
@@ -295,6 +404,7 @@ class AppDirector:
         with self.lock:
             if config.bot_id in self.active_bots:
                 self.active_bots[config.bot_id]['status'] = 'stopped'
+        self._write_state_file()
     
     def _check_global_pause(self):
         """Verifica si todos los bots están pausados y actualiza el flag global_paused."""
@@ -338,6 +448,7 @@ class AppDirector:
             # Emit event
             on_bot_status_change(bot_id, 'paused')
         self._check_global_pause()
+        self._write_state_file()
         return True
 
     def resume_bot(self, bot_id: str) -> bool:
@@ -363,6 +474,7 @@ class AppDirector:
             # Emit event
             on_bot_status_change(bot_id, 'resumed')
         self._check_global_pause()
+        self._write_state_file()
         return True
     
     def stop_bot(self, bot_id: str) -> bool:
@@ -386,6 +498,7 @@ class AppDirector:
         
         on_bot_status_change(bot_id, 'stopped')
         self._check_global_pause()
+        self._write_state_file()
         print(f"{Utils.dateprint()} - Bot '{bot_id}' detenido.")
         return True
 
