@@ -292,11 +292,41 @@ app_director.add_bot(bot)
 - Inicializa `NotificationService` con `TelegramNotificationProperties(token, chat_id)`.
 - Pásalo al AppDirector para recibir alertas.
 
-## Dashboard web
+## Dashboard Web y Control Remoto
+
+### Lanzamiento combinado (recomendado)
 ```powershell
-streamlit run streamlit_app.py
+python run_framework_and_dashboard.py
 ```
-Muestra información de cuenta y posiciones abiertas.
+Este script inicia **ambos** componentes simultáneamente:
+- Dashboard Streamlit en segundo plano (puerto 8501)
+- CLI del framework en primer plano
+
+### Lanzamiento manual
+```powershell
+# Terminal 1: Dashboard
+streamlit run streamlit_app.py
+
+# Terminal 2: Framework
+python simple_trading_app.py
+```
+
+### Control remoto desde Streamlit
+El dashboard permite controlar los bots **sin usar la terminal**:
+
+1. **Ver estado de bots**: Sección "🤖 Bots Activos" muestra todos los bots en tiempo real
+2. **Controles estilo video-player**: Cada bot tiene botones:
+   - ▶️ Reanudar bot pausado
+   - ⏸️ Pausar bot activo
+   - ⏹️ Detener bot completamente
+3. **Actualización automática**: El estado se sincroniza cada pocos segundos
+
+### Sistema de comunicación (JSON IPC)
+El framework y Streamlit se comunican mediante archivos JSON:
+- `bots_state.json`: El framework escribe el estado de bots (Streamlit lo lee)
+- `bots_commands.json`: Streamlit escribe comandos (el framework los procesa cada 2s)
+
+> **Nota**: Estos archivos están en `.gitignore` y se crean/eliminan automáticamente.
 
 ## Limitaciones conocidas
 - Backtesting no modela SL/TP, slippage ni sesiones de mercado.
