@@ -1,3 +1,4 @@
+import json
 import os
 import pandas as pd
 import MetaTrader5 as mt5
@@ -5,25 +6,62 @@ import streamlit as st
 
 from Easy_Trading import BasicTrading
 from data.repositories.trade_repository import TradeRepository
-from trading_director.app_director import AppDirector, BotConfig
-from utils.strategy_discovery import StrategyDiscovery
-from utils.utils import Utils
+from data.trade_logger import TradeLogger
+
+
+def read_bots_state() -> dict:
+    """Lee el estado de los bots desde el archivo JSON compartido.
+    
+    Returns:
+        Diccionario con el estado: {'global_paused': bool, 'bots': [...]}
+        Retorna estado vacío si el archivo no existe.
+    """
+    state_file = os.path.join(os.path.dirname(__file__), 'bots_state.json')
+    try:
+        if os.path.exists(state_file):
+            with open(state_file, 'r') as f:
+                return json.load(f)
+    except Exception as e:
+        print(f"Error leyendo estado de bots: {e}")
+    return {'global_paused': False, 'bots': []}
+
+
+def send_bot_command(action: str, bot_id: str = None):
+    """Envía un comando al framework escribiendo en el archivo de comandos.
+    
+    Args:
+        action: Acción a ejecutar (pause, resume, stop, restart, pause_all, resume_all)
+        bot_id: ID del bot (opcional para acciones globales)
+    """
+    commands_file = os.path.join(os.path.dirname(__file__), 'bots_commands.json')
+    
+    # Leer comandos existentes (si hay)
+    existing_commands = []
+    try:
+        if os.path.exists(commands_file):
+            with open(commands_file, 'r') as f:
+                existing_commands = json.load(f)
+    except:
+        existing_commands = []
+    
+    # Añadir nuevo comando
+    new_command = {'action': action}
+    if bot_id:
+        new_command['bot_id'] = bot_id
+    existing_commands.append(new_command)
+    
+    # Escribir archivo
+    try:
+        with open(commands_file, 'w') as f:
+            json.dump(existing_commands, f, indent=2)
+    except Exception as e:
+        st.error(f"Error enviando comando: {e}")
 
 
 @st.cache_resource(show_spinner=False)
 def get_bt_client() -> BasicTrading:
     """Crea una única instancia de BasicTrading (MT5)."""
     return BasicTrading()
-
-
-def get_app_director() -> AppDirector:
-    """Crea una instancia de AppDirector para controlar los bots.
-
-    No se cachea para garantizar que siempre tenga los métodos más recientes
-    cuando cambia el código durante el desarrollo.
-    """
-    bt_client = get_bt_client()
-    return AppDirector(bt_client, notification_service=None)
 
 
 @st.cache_resource(show_spinner=False)
@@ -39,41 +77,24 @@ def get_trade_repository() -> TradeRepository:
     return TradeRepository(account_id=account_id)
 
 
-def create_default_bots() -> list:
-    """Replica la lógica de simple_trading_app para detectar y crear bots por defecto."""
-    bots = []
-    strategies = StrategyDiscovery.get_all_strategies()
-    strategy_symbols = StrategyDiscovery.get_strategy_symbols()
-
-    for strategy_name, strategy_class in strategies.items():
-        symbols = strategy_symbols.get(strategy_name, ['EURUSD'])
-        for symbol in symbols:
-            try:
-                strategy_instance = strategy_class()
-                bot = BotConfig(
-                    strategy=strategy_instance,
-                    symbol=symbol,
-                    timeframe=mt5.TIMEFRAME_M1,
-                    interval_seconds=60,
-                    data_points=100,
-                )
-                bots.append(bot)
-            except Exception as e:
-                print(f"{Utils.dateprint()} - [Streamlit] Error creando bot para {strategy_name}-{symbol}: {e}")
-
-    return bots
-
-
 def main():
     st.set_page_config(page_title="Framework Trading - Dashboard", layout="wide")
     st.title("Framework Trading - Dashboard")
     st.markdown("Información básica de cuenta, posiciones abiertas y control de bots.")
 
     bt_client = get_bt_client()
-    app_director = get_app_director()
 
     # Sección cuenta
     st.subheader("Información de Cuenta")
+    # Botón para refrescar manualmente los datos básicos de la cuenta
+    if st.button("🔄 Refrescar datos de cuenta"):
+        try:
+            # Si la conexión se ha caído, intentar reconectar antes de leer datos
+            if not bt_client.check_connection():
+                bt_client.reconnect()
+        except Exception as e:
+            st.warning(f"No se pudo refrescar la conexión MT5: {e}")
+
     col0, col1, col2, col3, col4 = st.columns([1.5, 2, 2, 2, 2])
 
     # Indicador de conexión MT5
@@ -84,6 +105,15 @@ def main():
             col0.error("MT5 desconectado")
     except Exception:
         col0.warning("Estado MT5 desconocido")
+
+    # Tipo de cuenta (DEMO / REAL)
+    try:
+        if bt_client.is_demo_account():
+            col0.caption("Cuenta DEMO")
+        else:
+            col0.caption("Cuenta REAL")
+    except Exception:
+        col0.caption("Tipo de cuenta desconocido")
 
     try:
         balance, profit, equity, free_margin = bt_client.info_account()
@@ -97,69 +127,79 @@ def main():
     st.divider()
 
     # ==================== CONTROL DE BOTS ====================
-    st.subheader("Control de Bots")
-
-    col_left, col_right = st.columns([2, 1])
-
-    with col_left:
-        if st.button("🔄 Iniciar bots por defecto", help="Crea y arranca bots detectando estrategias disponibles"):
-            default_bots = create_default_bots()
-            if not default_bots:
-                st.warning("No se encontraron estrategias válidas para crear bots.")
-            else:
-                created = 0
-                for bot in default_bots:
-                    if app_director.add_bot(bot):
-                        created += 1
-                st.success(f"Se intentaron crear {len(default_bots)} bots. Bots agregados: {created}.")
-
-        if st.button("⏹️ Detener todos los bots"):
-            app_director.stop_all_bots()
-            st.success("Todos los bots detenidos.")
-
-    with col_right:
-        if app_director.is_globally_paused():
-            st.info("Sistema en pausa global (todos los bots pausados).")
-
-    bot_status_list = app_director.get_all_bots_status()
-    if not bot_status_list:
-        st.info("No hay bots activos actualmente.")
-    else:
-        st.write("### Estado de bots activos")
-        for status in bot_status_list:
-            if not status:
-                continue
-            bot_id = status["bot_id"]
-            cols = st.columns([3, 2, 2, 2, 3])
-            cols[0].markdown(f"**{bot_id}**")
-            cols[1].write(f"Status: {status['status']}")
-            cols[2].write(f"Símbolo: {status['symbol']}")
-            cols[3].write(f"TF: {status['timeframe']}")
-
-            with cols[4]:
-                c1, c2 = st.columns(2)
-                if status['status'] in ['running', 'waiting_market']:
-                    if c1.button("⏸️ Pausar", key=f"pause_{bot_id}"):
-                        app_director.pause_bot(bot_id)
-                        st.experimental_rerun()
-                elif status['status'] == 'paused':
-                    if c1.button("▶️ Reanudar", key=f"resume_{bot_id}"):
-                        app_director.resume_bot(bot_id)
-                        st.experimental_rerun()
-                # Botón de reinicio disponible siempre
-                if c2.button("🔁 Reiniciar", key=f"restart_{bot_id}"):
-                    app_director.restart_bot(bot_id)
-                    st.experimental_rerun()
+    bots_state = read_bots_state()
+    bot_status_list = bots_state.get('bots', [])
+    
+    # Contador de bots activos
+    running_count = sum(1 for b in bot_status_list if b.get('status') in ['running', 'waiting_market'])
+    paused_count = sum(1 for b in bot_status_list if b.get('status') == 'paused')
+    total_count = len(bot_status_list)
+    
+    # Expander para ver y controlar bots
+    with st.expander(f"🤖 Bots ({running_count} activos / {total_count} total)", expanded=False):
+        if not bot_status_list:
+            st.info("No hay bots. Inicia el framework con `python simple_trading_app.py`")
+        else:
+            # Botón refrescar arriba
+            if st.button("🔄 Actualizar estado"):
+                st.rerun()
+            
+            st.write("")
+            
+            for status in bot_status_list:
+                if not status:
+                    continue
+                bot_id = status["bot_id"]
+                bot_status_str = status['status']
+                
+                # Icono según estado
+                status_colors = {
+                    'running': '🟢',
+                    'paused': '🟡',
+                    'waiting_market': '🔵',
+                    'stopped': '🔴',
+                    'starting': '⚪'
+                }
+                color = status_colors.get(bot_status_str, '⚪')
+                
+                # Una fila por bot: Indicador + Nombre + Controles tipo video
+                col_indicator, col_name, col_play, col_pause, col_stop = st.columns([0.5, 4, 0.8, 0.8, 0.8])
+                
+                col_indicator.write(color)
+                col_name.write(f"**{bot_id}** ({status['symbol']})")
+                
+                # Play (reanudar)
+                play_disabled = bot_status_str not in ['paused', 'stopped']
+                if col_play.button("▶️", key=f"play_{bot_id}", disabled=play_disabled):
+                    if bot_status_str == 'stopped':
+                        send_bot_command('restart', bot_id)
+                    else:
+                        send_bot_command('resume', bot_id)
+                    st.rerun()
+                
+                # Pause
+                pause_disabled = bot_status_str not in ['running', 'waiting_market']
+                if col_pause.button("⏸️", key=f"pause_{bot_id}", disabled=pause_disabled):
+                    send_bot_command('pause', bot_id)
+                    st.rerun()
+                
+                # Stop
+                stop_disabled = bot_status_str == 'stopped'
+                if col_stop.button("⏹️", key=f"stop_{bot_id}", disabled=stop_disabled):
+                    send_bot_command('stop', bot_id)
+                    st.rerun()
 
     # Estadísticas agregadas por bot (desde la base de datos)
     st.write("### Estadísticas por Bot")
     try:
-        bot_stats = app_director.get_all_trading_stats()
+        repo = get_trade_repository()
+        trade_logger = TradeLogger(repository=repo)
+        bot_stats = trade_logger.get_all_stats()
         if not bot_stats:
             st.info("No hay estadísticas de trading por bot todavía.")
         else:
             df_bot_stats = pd.DataFrame(bot_stats)
-            st.dataframe(df_bot_stats, width="stretch")
+            st.dataframe(df_bot_stats, use_container_width=True)
     except Exception as e:
         st.error(f"No se pudieron cargar las estadísticas por bot: {e}")
 
