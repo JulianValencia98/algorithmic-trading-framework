@@ -1,2 +1,3 @@
 from .strategy_base import StrategyBase
 from .simple_time_strategy import SimpleTimeStrategy
+from .mean_reversion_bb_strategy import MeanReversionBBStrategy

@@ -17,6 +17,10 @@ ID   | Nombre de Estrategia      | Magic Number | Símbolos Soportados
 0003 | (Disponible)              | 3            | -
 0004 | (Disponible)              | 4            | -
 0005 | (Disponible)              | 5            | -
+0010 | MeanReversionBBStrategy   | 10           | EURUSD, GBPUSD, USDJPY (default)
+0011 | MeanReversionBB_Conserv   | 11           | (preset: conservative)
+0012 | MeanReversionBB_Aggress   | 12           | (preset: aggressive)
+0013 | MeanReversionBB_Scalping  | 13           | (preset: scalping)
 
 ====================================================
 FRAMEWORK DINÁMICO - DETECCIÓN AUTOMÁTICA:

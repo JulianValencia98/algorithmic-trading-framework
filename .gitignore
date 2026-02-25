@@ -46,3 +46,6 @@ htmlcov/
 # Bot state files (IPC)
 bots_state.json
 bots_commands.json
+
+# Bibliografia
+bibliografia/
